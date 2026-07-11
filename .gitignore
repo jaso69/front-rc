@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-editor/
+dist-test/
+generated/
+data/
+*.log
+.DS_Store
