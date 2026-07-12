@@ -57,12 +57,6 @@ Abre `http://localhost:3000` en el navegador.
 > Para desarrollo: `npm start` en una terminal + `npm run dev` en otra (hot reload del editor).
 > Para despliegue: `docker build` + `docker run` con volúmenes (persistencia de diseños e imágenes).
 
-# Construir
-docker build -t front-rc .
-
-# Ejecutar (con volúmenes para persistir datos)
-docker run -d -p 3000:3000 -v front-rc-data:/app/data -v front-rc-gen:/app/generated front-rc
-
 ## Elementos
 
 | Tipo | Props | Acción |
@@ -84,6 +78,21 @@ Las imágenes se gestionan desde el editor con el botón **"Examinar"** que apar
 - **Seleccionar** una imagen para asignarla al elemento.
 
 Las imágenes se sirven en `/assets/<nombre>` y están disponibles tanto en la previsualización del editor como en los diseños generados.
+
+## Librería de iconos SVG de AV
+
+El proyecto incluye una colección de **36 iconos SVG** en `data/assets/` listos para usar en diseños de control AV. Son iconos minimalistas (estilo line/feather) en blanco sobre transparente, viewBox 24x24, ideales para fondos oscuros.
+
+| Categoría | Iconos |
+|---|---|
+| **Reproducción** | `play`, `pause`, `stop`, `record`, `eject`, `fast-forward`, `rewind`, `skip-forward`, `skip-backward` |
+| **Volumen** | `volume-up`, `volume-down`, `volume-mute`, `speaker` |
+| **Energía y entrada** | `power`, `input`, `hdmi`, `cast` |
+| **Navegación** | `arrow-up`, `arrow-down`, `arrow-left`, `arrow-right`, `channel-up`, `channel-down`, `home`, `menu`, `settings` |
+| **Dispositivos** | `tv`, `monitor`, `projector`, `camera`, `mic` |
+| **Conectividad/AV** | `wifi`, `bluetooth`, `light`, `brightness`, `fullscreen` |
+
+Para usarlos: arrastra un elemento **Imagen** al lienzo, pulsa **Examinar** y selecciona el icono. También pueden usarse como fondo de pantalla (opción Imagen).
 
 ## Fondos de pantalla
 

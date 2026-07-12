@@ -3,6 +3,8 @@ dist/
 dist-editor/
 dist-test/
 generated/
-data/
+data/designs/
+data/assets/*
+!data/assets/*.svg
 *.log
 .DS_Store

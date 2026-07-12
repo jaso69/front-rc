@@ -30,6 +30,9 @@ COPY src/ ./src/
 # Directorios de datos en tiempo de ejecución (se montan como volúmenes)
 RUN mkdir -p data/designs data/assets generated
 
+# Copia la librería de iconos SVG de AV (assets por defecto)
+COPY data/assets/*.svg ./data/assets/
+
 EXPOSE 3000
 
 CMD ["npm", "start"]

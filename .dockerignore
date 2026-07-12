@@ -10,3 +10,6 @@ generated/
 .commandcode/
 PLAN.md
 README.md
+data/designs/
+data/assets/*
+!data/assets/*.svg

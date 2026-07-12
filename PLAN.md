@@ -11,6 +11,7 @@ App para **diseñar** interfaces de control AV (botones, sliders, imágenes, eti
 - **Distribución:** servidor web local (Node.js + Express) que sirve los diseños generados. Las tablets abren `http://<servidor-local>/designs/<nombre>/`.
 - **Almacenamiento de diseños:** ficheros JSON locales en `data/designs/` (fuente de verdad interna; de ahí se genera el estático).
 - **Assets de imagen:** almacenados en `data/assets/`, servidos en `/assets/`. El editor incluye un selector visual para subir y asignar imágenes sin escribir rutas a mano.
+- **Librería de iconos SVG:** el proyecto incluye 36 iconos SVG típicos de control AV (reproducción, volumen, energía, navegación, dispositivos, conectividad) en `data/assets/`. Se trackean en git y se incluyen en la imagen Docker como assets por defecto.
 - **Conectividad:** siempre online (tablets en la misma red que el backend AV y el servidor local).
 - **Comportamiento:** solo envía comandos (sin estado en vivo).
 - **Distribución con Docker:** imagen multi-stage (`node:22-slim`). El primer stage compila el editor con Vite; el segundo ejecuta el backend con `tsx` y sirve el editor compilado. Los directorios `data/` y `generated/` se exponen como volúmenes para persistir diseños, imágenes y estáticos entre recreaciones del contenedor.
@@ -115,3 +116,4 @@ front-rc/
 - ✅ Fase 7: Selector de assets (subir/listar/borrar imágenes desde el editor)
 - ✅ Fase 8: Elementos decorativos (línea y rectángulo para separar secciones)
 - ✅ Fase 9: Contenedor Docker (Dockerfile multi-stage con volúmenes para persistencia)
+- ✅ Fase 10: Librería de iconos SVG de AV (36 iconos preinstalados en data/assets/)
