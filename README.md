@@ -57,6 +57,12 @@ Abre `http://localhost:3000` en el navegador.
 > Para desarrollo: `npm start` en una terminal + `npm run dev` en otra (hot reload del editor).
 > Para despliegue: `docker build` + `docker run` con volúmenes (persistencia de diseños e imágenes).
 
+# Construir
+docker build -t front-rc .
+
+# Ejecutar (con volúmenes para persistir datos)
+docker run -d -p 3000:3000 -v front-rc-data:/app/data -v front-rc-gen:/app/generated front-rc
+
 ## Elementos
 
 | Tipo | Props | Acción |
