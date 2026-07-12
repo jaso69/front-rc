@@ -34,6 +34,8 @@ export function Palette() {
       <PaletteItem type="slider" label="Slider" icon="═" />
       <PaletteItem type="image" label="Imagen" icon="🖼" />
       <PaletteItem type="label" label="Etiqueta" icon="Aa" />
+      <PaletteItem type="line" label="Línea" icon="—" />
+      <PaletteItem type="rectangle" label="Rectángulo" icon="▭" />
     </div>
   );
 }

@@ -1,10 +1,12 @@
 # front-rc
 
-Diseñador y generador de interfaces de control AV. Crea diseños visuales con botones, sliders, imágenes y etiquetas, asígnalles endpoints de tu backend AV, y exporta HTML+CSS+JS estático puro que se sirve a tablets, Mac y web a través de un servidor local.
+Diseñador y generador de interfaces de control AV. Crea diseños visuales con botones, sliders, imágenes, etiquetas, líneas y rectángulos, asígnalles endpoints de tu backend AV, y exporta HTML+CSS+JS estático puro que se sirve a tablets, Mac y web a través de un servidor local.
 
 El backend AV es **intocable** — solo recibe peticiones HTTP. El reproductor no usa framework ni interpreta JSON en tiempo de ejecución: el HTML ya viene construido.
 
 ## Inicio rápido
+
+### Local
 
 ```bash
 npm install
@@ -14,14 +16,31 @@ npm start
 
 Abre `http://localhost:3000` en el navegador.
 
+### Docker
+
+```bash
+docker build -t front-rc .
+docker run -d -p 3000:3000 \
+  -v front-rc-data:/app/data \
+  -v front-rc-gen:/app/generated \
+  front-rc
+```
+
+Abre `http://localhost:3000` en el navegador.
+
+- El volumen `front-rc-data` persiste los diseños (`data/designs/`) y las imágenes subidas (`data/assets/`).
+- El volumen `front-rc-gen` persiste los diseños generados (`generated/`).
+- Al arrancar sin diseños, siembra automáticamente un diseño de ejemplo ("salon").
+
 ## Flujo de uso
 
 1. **Crea un diseño** desde el editor (o carga uno existente).
-2. **Arrastra componentes** desde la paleta al lienzo (botón, slider, imagen, etiqueta).
+2. **Arrastra componentes** desde la paleta al lienzo (botón, slider, imagen, etiqueta, línea, rectángulo).
 3. **Configura cada elemento**: posición, estilo y acción (petición HTTP a tu backend AV o navegación entre pantallas).
-4. **Define el fondo** de cada pantalla (color sólido, gradiente o imagen).
-5. **Genera** — el servidor guarda el JSON y produce `index.html` + `styles.css` + `app.js` vanilla.
-6. **Sirve** — las tablets abren `http://<ip-del-servidor>:3000/designs/<nombre>/` y los controles disparan `fetch()` al backend AV.
+4. **Sube imágenes** al directorio de assets desde el editor y asígnalas a elementos imagen o fondos con el botón "Examinar".
+5. **Define el fondo** de cada pantalla (color sólido, gradiente o imagen).
+6. **Genera** — el servidor guarda el JSON y produce `index.html` + `styles.css` + `app.js` vanilla.
+7. **Sirve** — las tablets abren `http://<ip-del-servidor>:3000/designs/<nombre>/` y los controles disparan `fetch()` al backend AV.
 
 ## Comandos
 
@@ -31,9 +50,12 @@ Abre `http://localhost:3000` en el navegador.
 | `npm run dev` | Dev server de Vite (puerto 5173, proxy a :3000) |
 | `npm run build:editor` | Compila el editor a `dist-editor/` |
 | `npm run typecheck` | Typecheck de backend + editor |
+| `docker build -t front-rc .` | Construye la imagen Docker |
+| `docker run -p 3000:3000 front-rc` | Ejecuta el contenedor (ver volúmenes arriba) |
 
 > Para producción: `npm run build:editor && npm start`
 > Para desarrollo: `npm start` en una terminal + `npm run dev` en otra (hot reload del editor).
+> Para despliegue: `docker build` + `docker run` con volúmenes (persistencia de diseños e imágenes).
 
 ## Elementos
 
@@ -41,8 +63,21 @@ Abre `http://localhost:3000` en el navegador.
 |---|---|---|
 | **Botón** | texto, estilo | HTTP o navegación |
 | **Slider** | min/max/step/valor, etiqueta, envío en soltar o arrastrar | HTTP (con `{{value}}`) |
-| **Imagen** | URL | HTTP o navegación (opcional) |
+| **Imagen** | URL (selector de assets integrado) | HTTP o navegación (opcional) |
 | **Etiqueta** | texto, alineación | no interactiva |
+| **Línea** | orientación (horizontal/vertical), color, grosor | decorativa (no interactiva) |
+| **Rectángulo** | fondo, borde, esquinas, opacidad | decorativo (no interactivo) |
+
+## Assets de imagen
+
+Las imágenes se gestionan desde el editor con el botón **"Examinar"** que aparece junto al campo de imagen (en elementos imagen y en fondos de pantalla). Abre un modal que permite:
+
+- **Ver** las imágenes disponibles en `data/assets/` con thumbnails.
+- **Subir** nuevas imágenes (PNG, JPG, GIF, SVG, WebP, ICO).
+- **Borrar** imágenes que ya no se necesiten.
+- **Seleccionar** una imagen para asignarla al elemento.
+
+Las imágenes se sirven en `/assets/<nombre>` y están disponibles tanto en la previsualización del editor como en los diseños generados.
 
 ## Fondos de pantalla
 
@@ -95,6 +130,10 @@ Cambia la pantalla visible sin recargar la página.
 | `PUT` | `/api/designs/:name` | Crear o actualizar |
 | `DELETE` | `/api/designs/:name` | Borrar |
 | `POST` | `/api/designs/:name/generate` | Generar estáticos |
+| `GET` | `/api/assets` | Listar imágenes disponibles |
+| `POST` | `/api/assets` | Subir una imagen (base64) |
+| `DELETE` | `/api/assets/:filename` | Borrar una imagen |
+| `GET` | `/assets/:filename` | Servir imagen estática |
 
 ## Estructura del proyecto
 
@@ -111,8 +150,11 @@ front-rc/
 │       ├── useKeyboardShortcuts.ts
 │       └── api.ts          # Cliente HTTP
 ├── data/designs/           # Diseños guardados (JSON)
+├── data/assets/             # Imágenes subidas desde el editor
 ├── generated/              # Output del generador (HTML+CSS+JS)
 ├── dist-editor/            # Editor compilado
+├── Dockerfile              # Imagen Docker multi-stage (build + runtime)
+├── .dockerignore
 └── vite.config.ts
 ```
 
@@ -131,7 +173,7 @@ Editor (React)  →  Servidor local (Express)  →  HTML+CSS+JS estático
 
 - El editor y el servidor comparten un **esquema TypeScript** que define el diseño.
 - El **generador** convierte ese esquema en ficheros estáticos sin dependencias.
-- El **servidor local** cumple dos roles: servir el editor y servir los diseños generados.
+- El **servidor local** cumple tres roles: servir el editor, servir los diseños generados y servir las imágenes de `data/assets/` en `/assets/`.
 - Las **tablets** solo necesitan un navegador — abren una URL y funcionan.
 
 ## Tecnologías

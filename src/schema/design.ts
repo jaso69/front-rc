@@ -17,7 +17,7 @@ export interface DesignConfig {
 // Elementos
 // ──────────────────────────────────────────────
 
-export type ElementType = "button" | "slider" | "image" | "label";
+export type ElementType = "button" | "slider" | "image" | "label" | "line" | "rectangle";
 
 interface BaseElement {
   id: string;
@@ -57,7 +57,24 @@ export interface LabelElement extends BaseElement {
   align?: "left" | "center" | "right";
 }
 
-export type DesignElement = ButtonElement | SliderElement | ImageElement | LabelElement;
+/** Línea divisoria horizontal o vertical. El color viene de style.backgroundColor. */
+export interface LineElement extends BaseElement {
+  type: "line";
+  orientation: "horizontal" | "vertical";
+}
+
+/** Rectángulo decorativo para agrupar o separar secciones. */
+export interface RectangleElement extends BaseElement {
+  type: "rectangle";
+}
+
+export type DesignElement =
+  | ButtonElement
+  | SliderElement
+  | ImageElement
+  | LabelElement
+  | LineElement
+  | RectangleElement;
 
 // ──────────────────────────────────────────────
 // Pantalla y diseño completo

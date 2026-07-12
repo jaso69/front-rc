@@ -7,6 +7,8 @@ import type {
   ElementType,
   ImageElement,
   LabelElement,
+  LineElement,
+  RectangleElement,
   SliderElement,
 } from "@schema/design.ts";
 import type { Background } from "@schema/style.ts";
@@ -15,7 +17,7 @@ import { createElement, createEmptyDesign, genScreenId } from "./factory.ts";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export type ElementPatch = Partial<ButtonElement> | Partial<SliderElement> | Partial<ImageElement> | Partial<LabelElement>;
+export type ElementPatch = Partial<ButtonElement> | Partial<SliderElement> | Partial<ImageElement> | Partial<LabelElement> | Partial<LineElement> | Partial<RectangleElement>;
 
 export interface DesignState {
   design: Design | null;

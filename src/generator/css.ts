@@ -129,6 +129,18 @@ body {
   text-overflow: ellipsis;
 }
 
+/* ── Línea ── */
+.rc-line {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* ── Rectángulo ── */
+.rc-rect {
+  position: absolute;
+  pointer-events: none;
+}
+
 /* ── Feedback de error de red ── */
 .rc-toast {
   position: fixed;

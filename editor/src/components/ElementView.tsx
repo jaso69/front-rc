@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import type { ButtonElement, DesignElement, ImageElement, LabelElement, SliderElement } from "@schema/design.ts";
+import type { ButtonElement, DesignElement, ImageElement, LabelElement, LineElement, RectangleElement, SliderElement } from "@schema/design.ts";
 
 export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
@@ -59,6 +59,32 @@ function Preview({ element }: { element: DesignElement }) {
         }}>
           {lbl.text}
         </div>
+      );
+    }
+    case "line": {
+      const line = element as LineElement;
+      const s = line.style;
+      return (
+        <div style={{
+          width: "100%",
+          height: "100%",
+          backgroundColor: s?.backgroundColor ?? "#666",
+          opacity: s?.opacity ?? 1,
+        }} />
+      );
+    }
+    case "rectangle": {
+      const rect = element as RectangleElement;
+      const s = rect.style;
+      return (
+        <div style={{
+          width: "100%",
+          height: "100%",
+          backgroundColor: s?.backgroundColor ?? "transparent",
+          borderRadius: s?.borderRadius ?? 0,
+          border: s?.borderWidth ? `${s.borderWidth}px solid ${s.borderColor ?? "#666"}` : "none",
+          opacity: s?.opacity ?? 1,
+        }} />
       );
     }
   }

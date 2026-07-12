@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-editor/
+generated/
+.git/
+.gitignore
+*.log
+.DS_Store
+.opencode/
+.commandcode/
+PLAN.md
+README.md

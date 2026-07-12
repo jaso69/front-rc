@@ -1,8 +1,34 @@
 import { useState } from "react";
 import type { ElementAction, HttpAction, HttpMethod, NavigateAction } from "@schema/action.ts";
 import type { Background } from "@schema/style.ts";
-import type { ButtonElement, Design, DesignElement, ImageElement, LabelElement, Screen, SliderElement } from "@schema/design.ts";
+import type { ButtonElement, Design, DesignElement, ImageElement, LabelElement, LineElement, Screen, SliderElement } from "@schema/design.ts";
 import type { DesignState, ElementPatch } from "../useDesign.ts";
+import { AssetPicker } from "./AssetPicker.tsx";
+
+// Normaliza un valor hex para el input type="color" (requiere #rrggbb).
+function normalizeHex(v: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#000000";
+}
+
+// Campo de color: selector visual + input de texto para el valor hex.
+function ColorField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="src-row">
+      <input
+        type="color"
+        value={normalizeHex(value)}
+        onChange={(e) => onChange(e.target.value)}
+        title="Seleccionar color"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
 
 interface Props {
   state: DesignState;
@@ -16,6 +42,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label>{label}</label>
       {children}
     </div>
+  );
+}
+
+// Campo de origen de imagen: input de texto + botón para abrir el selector de assets.
+function ImageSourceField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  return (
+    <>
+      <div className="src-row">
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="/assets/logo.png" />
+        <button className="btn-browse" onClick={() => setPickerOpen(true)} title="Examinar assets">Examinar</button>
+      </div>
+      <AssetPicker
+        open={pickerOpen}
+        onPick={(p) => { onChange(p); setPickerOpen(false); }}
+        onClose={() => setPickerOpen(false)}
+      />
+    </>
   );
 }
 
@@ -42,14 +86,14 @@ function BackgroundEditor({ bg, onChange }: { bg: Background | undefined; onChan
       </Field>
       {bg?.type === "color" && (
         <Field label="Color">
-          <input type="text" value={bg.color} onChange={(e) => onChange({ ...bg, color: e.target.value })} />
+          <ColorField value={bg.color} onChange={(v) => onChange({ ...bg, color: v })} />
         </Field>
       )}
       {bg?.type === "gradient" && (
         <>
           <div className="row">
-            <Field label="Desde"><input type="text" value={bg.from} onChange={(e) => onChange({ ...bg, from: e.target.value })} /></Field>
-            <Field label="Hasta"><input type="text" value={bg.to} onChange={(e) => onChange({ ...bg, to: e.target.value })} /></Field>
+            <Field label="Desde"><ColorField value={bg.from} onChange={(v) => onChange({ ...bg, from: v })} /></Field>
+            <Field label="Hasta"><ColorField value={bg.to} onChange={(v) => onChange({ ...bg, to: v })} /></Field>
           </div>
           <Field label="Ángulo (grados)">
             <input type="number" value={bg.angle} onChange={(e) => onChange({ ...bg, angle: Number(e.target.value) })} />
@@ -57,8 +101,8 @@ function BackgroundEditor({ bg, onChange }: { bg: Background | undefined; onChan
         </>
       )}
       {bg?.type === "image" && (
-        <Field label="URL de la imagen">
-          <input type="text" value={bg.src} onChange={(e) => onChange({ ...bg, src: e.target.value })} placeholder="/assets/bg.png" />
+        <Field label="Imagen">
+          <ImageSourceField value={bg.src} onChange={(src) => onChange({ ...bg, src })} />
         </Field>
       )}
     </>
@@ -204,8 +248,8 @@ function SliderProps({ el, update }: { el: SliderElement; update: (p: ElementPat
 
 function ImageProps({ el, update }: { el: ImageElement; update: (p: ElementPatch) => void }) {
   return (
-    <Field label="URL de la imagen">
-      <input type="text" value={el.src} onChange={(e) => update({ src: e.target.value })} placeholder="/assets/logo.png" />
+    <Field label="Imagen">
+      <ImageSourceField value={el.src} onChange={(src) => update({ src })} />
     </Field>
   );
 }
@@ -227,6 +271,23 @@ function LabelProps({ el, update }: { el: LabelElement; update: (p: ElementPatch
   );
 }
 
+function LineProps({ el, update }: { el: LineElement; update: (p: ElementPatch) => void }) {
+  return (
+    <Field label="Orientación">
+      <select
+        value={el.orientation}
+        onChange={(e) => {
+          const orientation = e.target.value as "horizontal" | "vertical";
+          update({ orientation, position: { ...el.position, width: el.position.height, height: el.position.width } });
+        }}
+      >
+        <option value="horizontal">Horizontal</option>
+        <option value="vertical">Vertical</option>
+      </select>
+    </Field>
+  );
+}
+
 function StyleEditor({ el, update }: { el: DesignElement; update: (p: ElementPatch) => void }) {
   const s = el.style ?? {};
 
@@ -239,10 +300,18 @@ function StyleEditor({ el, update }: { el: DesignElement; update: (p: ElementPat
       <h3>Estilo</h3>
       <div className="row">
         <Field label="Fondo">
-          <input type="text" value={s.backgroundColor ?? ""} onChange={(e) => setStyle({ backgroundColor: e.target.value })} placeholder="#2a6dbd" />
+          <ColorField value={s.backgroundColor ?? ""} onChange={(v) => setStyle({ backgroundColor: v })} placeholder="#2a6dbd" />
         </Field>
         <Field label="Color texto">
-          <input type="text" value={s.color ?? ""} onChange={(e) => setStyle({ color: e.target.value })} placeholder="#fff" />
+          <ColorField value={s.color ?? ""} onChange={(v) => setStyle({ color: v })} placeholder="#fff" />
+        </Field>
+      </div>
+      <div className="row">
+        <Field label="Color borde">
+          <ColorField value={s.borderColor ?? ""} onChange={(v) => setStyle({ borderColor: v })} placeholder="#666" />
+        </Field>
+        <Field label="Grosor borde">
+          <input type="number" value={s.borderWidth ?? 0} onChange={(e) => setStyle({ borderWidth: Number(e.target.value) })} />
         </Field>
       </div>
       <div className="row">
@@ -253,6 +322,9 @@ function StyleEditor({ el, update }: { el: DesignElement; update: (p: ElementPat
           <input type="number" value={s.fontSize ?? 0} onChange={(e) => setStyle({ fontSize: Number(e.target.value) })} />
         </Field>
       </div>
+      <Field label="Opacidad">
+        <input type="number" min={0} max={1} step={0.1} value={s.opacity ?? 1} onChange={(e) => setStyle({ opacity: Number(e.target.value) })} />
+      </Field>
     </>
   );
 }
@@ -309,7 +381,7 @@ export function PropertiesPanel({ state }: Props) {
 
   return (
     <div className="properties" onPointerDown={(e) => e.stopPropagation()}>
-      <h3>{el.type === "button" ? "Botón" : el.type === "slider" ? "Slider" : el.type === "image" ? "Imagen" : "Etiqueta"}</h3>
+      <h3>{el.type === "button" ? "Botón" : el.type === "slider" ? "Slider" : el.type === "image" ? "Imagen" : el.type === "line" ? "Línea" : el.type === "rectangle" ? "Rectángulo" : "Etiqueta"}</h3>
 
       <div className="row">
         <Field label="X"><input type="number" value={el.position.x} onChange={(e) => update({ position: { ...el.position, x: Number(e.target.value) } })} /></Field>
@@ -324,8 +396,9 @@ export function PropertiesPanel({ state }: Props) {
       {el.type === "slider" && <SliderProps el={el} update={update} />}
       {el.type === "image" && <ImageProps el={el} update={update} />}
       {el.type === "label" && <LabelProps el={el} update={update} />}
+      {el.type === "line" && <LineProps el={el} update={update} />}
 
-      {el.type !== "label" && (
+      {(el.type === "button" || el.type === "slider" || el.type === "image") && (
         <>
           <h3>Acción</h3>
           {el.type === "image" && !(el as ImageElement).action ? (

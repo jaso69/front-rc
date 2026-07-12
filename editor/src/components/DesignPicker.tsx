@@ -7,9 +7,26 @@ interface Props {
 }
 
 const PRESETS = [
-  { label: "Tablet horizontal (1280×800)", width: 1280, height: 800 },
+  // Móvil
+  { label: "Móvil pequeño (320×480)", width: 320, height: 480 },
+  { label: "Móvil estándar (375×667)", width: 375, height: 667 },
+  { label: "Móvil grande (414×896)", width: 414, height: 896 },
+  { label: "iPhone 14 Pro (393×852)", width: 393, height: 852 },
+  { label: "iPhone 14 Pro Max (430×932)", width: 430, height: 932 },
+  // Tablet
   { label: "Tablet vertical (800×1280)", width: 800, height: 1280 },
+  { label: "Tablet horizontal (1280×800)", width: 1280, height: 800 },
   { label: "iPad 11\" (1194×834)", width: 1194, height: 834 },
+  { label: "iPad 12.9\" (1366×1024)", width: 1366, height: 1024 },
+  { label: "iPad Mini (768×1024)", width: 768, height: 1024 },
+  // Escritorio
+  { label: "Portátil HD (1366×768)", width: 1366, height: 768 },
+  { label: "Escritorio Full HD (1920×1080)", width: 1920, height: 1080 },
+  { label: "Escritorio 2K (2560×1440)", width: 2560, height: 1440 },
+  { label: "Escritorio 4K (3840×2160)", width: 3840, height: 2160 },
+  // Personalizado
+  { label: "Cuadrado (1080×1080)", width: 1080, height: 1080 },
+  { label: "Banner horizontal (1920×600)", width: 1920, height: 600 },
 ];
 
 export function DesignPicker({ designs, onLoad, onNew }: Props) {

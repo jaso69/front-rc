@@ -3,12 +3,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { deleteDesign, getDesign, listDesigns, saveDesign } from "./store.ts";
 import { generateAndWrite, generatedDir } from "./generate.ts";
+import { assetsDir, deleteAsset, listAssets, saveAsset } from "./assets.ts";
 import type { Design } from "../schema/design.ts";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: "5mb" }));
+
+// ── Assets estáticos (imágenes subidas) ──
+// Se registra ANTES que el editor para que /assets/<img> se sirva desde data/assets/
+// y los bundles de Vite (/assets/<hash>.js) caigan al static del editor por fall-through.
+app.use("/assets", express.static(assetsDir()));
 
 // ── Editor (React compilado por Vite a dist-editor/) ──
 const editorDir = path.join(process.cwd(), "dist-editor");
@@ -77,6 +83,38 @@ app.post("/api/designs/:name/generate", (req, res) => {
   }
   const files = generateAndWrite(design, req.params.name);
   res.json({ ok: true, files, url: `/designs/${req.params.name}/` });
+});
+
+// ── API: assets ──
+
+// Listar assets disponibles
+app.get("/api/assets", (_req, res) => {
+  res.json({ assets: listAssets() });
+});
+
+// Subir un asset (base64 en JSON)
+app.post("/api/assets", (req, res) => {
+  const { filename, data } = req.body as { filename: string; data: string };
+  if (!filename || !data) {
+    res.status(400).json({ error: "Faltan filename o data" });
+    return;
+  }
+  try {
+    const saved = saveAsset(filename, data);
+    res.status(201).json({ ok: true, filename: saved });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+// Borrar un asset
+app.delete("/api/assets/:filename", (req, res) => {
+  const deleted = deleteAsset(req.params.filename);
+  if (!deleted) {
+    res.status(404).json({ error: "Asset no encontrado" });
+    return;
+  }
+  res.status(204).end();
 });
 
 // ── Diseños generados (sirve los estáticos al navegador/tablet) ──

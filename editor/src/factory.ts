@@ -5,6 +5,8 @@ import type {
   ElementType,
   ImageElement,
   LabelElement,
+  LineElement,
+  RectangleElement,
   SliderElement,
 } from "@schema/design.ts";
 
@@ -63,6 +65,30 @@ export function createElement(type: ElementType, x: number, y: number): DesignEl
         align: "left",
         position: { x: px, y: py, width: 200, height: 40 },
         style: { color: "#fff", fontSize: 16 },
+      };
+      return el;
+    }
+    case "line": {
+      const el: LineElement = {
+        id,
+        type: "line",
+        orientation: "horizontal",
+        position: { x: px, y: py, width: 240, height: 2 },
+        style: { backgroundColor: "#666" },
+      };
+      return el;
+    }
+    case "rectangle": {
+      const el: RectangleElement = {
+        id,
+        type: "rectangle",
+        position: { x: px, y: py, width: 280, height: 180 },
+        style: {
+          backgroundColor: "rgba(255,255,255,0.05)",
+          borderRadius: 10,
+          borderColor: "rgba(255,255,255,0.15)",
+          borderWidth: 1,
+        },
       };
       return el;
     }

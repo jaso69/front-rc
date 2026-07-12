@@ -22,7 +22,10 @@ function styleString(pos: Position, style?: ElementStyle): string {
     if (style.fontSize !== undefined) parts.push(`font-size:${style.fontSize}px`);
     if (style.borderRadius !== undefined) parts.push(`border-radius:${style.borderRadius}px`);
     if (style.borderColor) parts.push(`border-color:${style.borderColor}`);
-    if (style.borderWidth !== undefined) parts.push(`border-width:${style.borderWidth}px`);
+    if (style.borderWidth !== undefined) {
+      parts.push(`border-width:${style.borderWidth}px`);
+      parts.push(`border-style:solid`);
+    }
     if (style.opacity !== undefined) parts.push(`opacity:${style.opacity}`);
   }
   return parts.join(";");
@@ -65,6 +68,12 @@ function elementHtml(el: DesignElement): string {
 
     case "label":
       return `      <div id="${el.id}" class="rc-label" style="${style};${alignCss(el)}">${escapeHtml(el.text)}</div>`;
+
+    case "line":
+      return `      <div id="${el.id}" class="rc-line" style="${style}"></div>`;
+
+    case "rectangle":
+      return `      <div id="${el.id}" class="rc-rect" style="${style}"></div>`;
   }
 }
 

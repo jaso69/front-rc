@@ -35,6 +35,10 @@ function elementBinding(el: DesignElement): string {
       return imageBinding(el);
     case "label":
       return labelBinding(el);
+    case "line":
+      return "";
+    case "rectangle":
+      return "";
   }
 }
 
