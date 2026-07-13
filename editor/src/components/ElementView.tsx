@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import type { ButtonElement, DesignElement, ImageElement, LabelElement, LineElement, RectangleElement, SliderElement } from "@schema/design.ts";
+import type { ButtonElement, CheckboxElement, DesignElement, ImageElement, LabelElement, LineElement, RadioElement, RectangleElement, SliderElement } from "@schema/design.ts";
 
 export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
@@ -37,6 +37,27 @@ function Preview({ element }: { element: DesignElement }) {
         <div className={vertical ? "slider-preview vertical" : "slider-preview"}>
           {sl.label && <label>{sl.label}</label>}
           <input type="range" min={sl.min} max={sl.max} step={sl.step} defaultValue={sl.value} readOnly />
+        </div>
+      );
+    }
+    case "checkbox":
+    case "radio": {
+      const ch = element as CheckboxElement | RadioElement;
+      const s = ch.style;
+      const on = ch.type === "checkbox" ? ch.checked : ch.selected;
+      return (
+        <div
+          className={`check-preview${on ? " on" : ""}`}
+          style={{
+            backgroundColor: s?.backgroundColor ?? "rgba(255,255,255,0.06)",
+            color: s?.color ?? "#fff",
+            borderRadius: s?.borderRadius ?? 8,
+            fontSize: s?.fontSize ?? 16,
+            opacity: s?.opacity ?? 1,
+          }}
+        >
+          <input type={ch.type === "checkbox" ? "checkbox" : "radio"} checked={Boolean(on)} readOnly tabIndex={-1} />
+          <span>{ch.label}</span>
         </div>
       );
     }

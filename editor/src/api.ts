@@ -1,5 +1,5 @@
 import type { Design } from "@schema/design.ts";
-import type { DeviceView } from "@schema/device.ts";
+import type { DeviceStatus, DeviceView } from "@schema/device.ts";
 
 export async function listDesigns(): Promise<string[]> {
   const res = await fetch("/api/designs");
@@ -72,6 +72,17 @@ export async function listDevices(design: string): Promise<DeviceView[]> {
   return data.devices as DeviceView[];
 }
 
+/**
+ * Estado real de un equipo, para configurar el feedback. Las claves de `status` dependen del
+ * driver y no hay catálogo que las publique: se descubren preguntando al equipo.
+ */
+export async function readDeviceStatus(design: string, deviceId: string): Promise<DeviceStatus> {
+  const res = await fetch(`/api/designs/${design}/devices/${encodeURIComponent(deviceId)}/status`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "No se pudo leer el estado del equipo");
+  return data as DeviceStatus;
+}
+
 export interface ConnectionCheck {
   ok: boolean;
   devices?: number;
@@ -118,4 +129,47 @@ export async function uploadAsset(filename: string, file: File): Promise<string>
 
 export async function deleteAsset(filename: string): Promise<void> {
   await fetch(`/api/assets/${encodeURIComponent(filename)}`, { method: "DELETE" });
+}
+
+// ── Copias de seguridad ──
+
+export type RestoreMode = "merge" | "replace";
+
+export interface RestoreResult {
+  designs: string[];
+  assets: string[];
+  removed: string[];
+}
+
+/** Descarga la copia como fichero. El navegador la guarda donde el usuario tenga configurado. */
+export async function downloadBackup(): Promise<void> {
+  const res = await fetch("/api/backup");
+  if (!res.ok) throw new Error("No se pudo generar la copia de seguridad");
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = /filename="([^"]+)"/.exec(disposition);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = match?.[1] ?? "front-rc-backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function restoreBackup(file: File, mode: RestoreMode): Promise<RestoreResult> {
+  const text = await file.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("El fichero no es un JSON válido");
+  }
+  const res = await fetch(`/api/backup/restore?mode=${mode}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(parsed),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? "No se pudo restaurar la copia");
+  return data as RestoreResult;
 }

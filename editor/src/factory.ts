@@ -1,11 +1,13 @@
 import type {
   ButtonElement,
+  CheckboxElement,
   Design,
   DesignElement,
   ElementType,
   ImageElement,
   LabelElement,
   LineElement,
+  RadioElement,
   RectangleElement,
   SliderElement,
 } from "@schema/design.ts";
@@ -76,6 +78,31 @@ export function createElement(type: ElementType, x: number, y: number): DesignEl
         orientation: "horizontal",
         position: { x: px, y: py, width: 240, height: 2 },
         style: { backgroundColor: "#666" },
+      };
+      return el;
+    }
+    case "checkbox": {
+      const el: CheckboxElement = {
+        id,
+        type: "checkbox",
+        label: "Casilla",
+        checked: false,
+        position: { x: px, y: py, width: 200, height: 48 },
+        style: { backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", borderRadius: 8 },
+        action: { type: "command", deviceId: "", command: "" },
+      };
+      return el;
+    }
+    case "radio": {
+      const el: RadioElement = {
+        id,
+        type: "radio",
+        label: "Opción",
+        group: "grupo-1",
+        selected: false,
+        position: { x: px, y: py, width: 200, height: 48 },
+        style: { backgroundColor: "rgba(255,255,255,0.06)", color: "#fff", borderRadius: 8 },
+        action: { type: "command", deviceId: "", command: "" },
       };
       return el;
     }

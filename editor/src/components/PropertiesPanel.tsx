@@ -1,7 +1,9 @@
 import { useState } from "react";
-import type { DeviceCommandAction, ElementAction, HttpAction, HttpMethod, NavigateAction } from "@schema/action.ts";
+import type { BackendAction, DeviceCommandAction, ElementAction, HttpAction, HttpMethod, NavigateAction } from "@schema/action.ts";
 import type { Background } from "@schema/style.ts";
-import type { ButtonElement, Design, DesignElement, ImageElement, LabelElement, LineElement, Screen, SliderElement } from "@schema/design.ts";
+import type { ButtonElement, CheckboxElement, Design, DesignElement, ImageElement, LabelElement, LineElement, RadioElement, Screen, SliderElement, StateBinding } from "@schema/design.ts";
+import { isMacro } from "@schema/device.ts";
+import { readDeviceStatus } from "../api.ts";
 import type { DesignState, ElementPatch } from "../useDesign.ts";
 import type { DevicesState } from "../useDevices.ts";
 import { useDevices } from "../useDevices.ts";
@@ -115,12 +117,14 @@ function BackgroundEditor({ bg, onChange }: { bg: Background | undefined; onChan
 
 type ActionKind = "command" | "http" | "navigate";
 
-function TypeSelector({ value, onChange }: { value: ActionKind; onChange: (k: ActionKind) => void }) {
+function TypeSelector({ value, allowNavigate, onChange }: { value: ActionKind; allowNavigate: boolean; onChange: (k: ActionKind) => void }) {
   return (
     <Field label="Tipo de acción">
       <select value={value} onChange={(e) => onChange(e.target.value as ActionKind)}>
         <option value="command">Comando de equipo</option>
-        <option value="navigate">Navegar a pantalla</option>
+        {/* Una casilla o un radio no navegan: cambiar de pantalla al marcar dejaría el estado
+            marcado detrás, sin nada que lo haya activado. */}
+        {allowNavigate && <option value="navigate">Navegar a pantalla</option>}
         <option value="http">Petición HTTP (avanzado)</option>
       </select>
     </Field>
@@ -146,6 +150,9 @@ function CommandEditor({
   const device = devices.devices.find((d) => d.id === action.deviceId);
   // Un comando guardado que ya no está en el equipo: el integrador lo renombró o lo quitó.
   const unknownCommand = Boolean(action.command) && Boolean(device) && !device!.commands.includes(action.command);
+  const macro = action.kind === "macro";
+  const equipos = devices.devices.filter((d) => !isMacro(d));
+  const macros = devices.devices.filter(isMacro);
 
   function setCommand(patch: Partial<DeviceCommandAction>) {
     onChange({ ...action, ...patch });
@@ -153,36 +160,58 @@ function CommandEditor({
 
   return (
     <>
-      <Field label="Equipo">
+      <Field label="Equipo o macro">
         <select
           value={action.deviceId}
           onChange={(e) => {
-            // Cambiar de equipo invalida el comando: cada equipo tiene los suyos.
+            // Cambiar de equipo invalida el comando: cada equipo tiene los suyos. Y una macro no
+            // lleva valor: arrastrarlo del equipo anterior mandaría un parámetro que nadie lee.
             const next = devices.devices.find((d) => d.id === e.target.value);
-            setCommand({ deviceId: e.target.value, command: next?.commands[0] ?? "" });
+            const kind = next?.kind ?? "device";
+            setCommand({
+              deviceId: e.target.value,
+              command: next?.commands[0] ?? "",
+              kind,
+              ...(kind === "macro" ? { value: undefined } : {}),
+            });
           }}
         >
-          <option value="">— elige un equipo —</option>
-          {devices.devices.map((d) => (
+          <option value="">— elige un equipo o una macro —</option>
+          {equipos.map((d) => (
             <option key={d.id} value={d.id}>
               {d.id} ({d.driver})
             </option>
           ))}
+          {macros.length > 0 && (
+            <optgroup label="Macros">
+              {macros.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.driver === "macro" ? m.id : `${m.driver} (${m.id})`}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {action.deviceId && !device && <option value={action.deviceId}>{action.deviceId} (no está en el backend)</option>}
         </select>
       </Field>
 
-      <Field label="Comando">
-        <select value={action.command} onChange={(e) => setCommand({ command: e.target.value })} disabled={!device}>
-          <option value="">— elige un comando —</option>
-          {device?.commands.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-          {unknownCommand && <option value={action.command}>{action.command} (ya no existe)</option>}
-        </select>
-      </Field>
+      {macro ? (
+        // Una macro es una secuencia ya escrita en el backend: no hay comando que elegir ni
+        // parámetro que mandar. jaso-rc responde 202 y sigue por su cuenta.
+        <p className="hint">Ejecuta la macro <code>{action.deviceId}</code> en el servidor.</p>
+      ) : (
+        <Field label="Comando">
+          <select value={action.command} onChange={(e) => setCommand({ command: e.target.value })} disabled={!device}>
+            <option value="">— elige un comando —</option>
+            {device?.commands.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            {unknownCommand && <option value={action.command}>{action.command} (ya no existe)</option>}
+          </select>
+        </Field>
+      )}
 
-      {isSlider ? (
+      {macro ? null : isSlider ? (
         // El slider siempre manda su valor; jaso-rc lo espera en `value` y como número.
         <p className="hint">Envía <code>{"{ value: <posición del slider> }"}</code> al comando.</p>
       ) : (
@@ -209,17 +238,156 @@ function CommandEditor({
   );
 }
 
+/**
+ * Editor del feedback de estado.
+ *
+ * Las claves de `status` (power, input, level…) las decide el driver y la API no las publica en
+ * ningún catálogo, así que aquí no hay lista cerrada posible: **se le pregunta al equipo**. El
+ * botón "Leer estado" trae lo que el equipo devuelve ahora mismo y ofrece esas claves y ese
+ * valor, que es lo más parecido a un desplegable honesto que se puede hacer.
+ */
+function StateEditor({
+  el,
+  designName,
+  devices,
+  onChange,
+}: {
+  el: DesignElement;
+  designName: string;
+  devices: DevicesState;
+  onChange: (s: StateBinding | undefined) => void;
+}) {
+  const state = "state" in el ? el.state : undefined;
+  const [status, setStatus] = useState<Record<string, unknown> | null>(null);
+  const [reading, setReading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Las macros no tienen estado que consultar: son una secuencia, no un equipo.
+  const equipos = devices.devices.filter((d) => !isMacro(d));
+  // El valor lo compara el panel como texto; el slider y la etiqueta pintan el valor, no lo comparan.
+  const comparaValor = el.type === "button" || el.type === "checkbox" || el.type === "radio";
+
+  async function readStatus(deviceId: string) {
+    setReading(true);
+    setError(null);
+    try {
+      const data = await readDeviceStatus(designName, deviceId);
+      setStatus(data.status);
+      if (data.status.reachable === false) {
+        setError(`El equipo no responde${data.status.error ? `: ${data.status.error}` : ""}. Sin él no se pueden ver sus claves de estado.`);
+      }
+    } catch (err) {
+      setStatus(null);
+      setError((err as Error).message);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  if (!state) {
+    return (
+      <>
+        <h3>Feedback de estado</h3>
+        <p className="hint">
+          Sin esto el elemento no refleja nada: manda la orden y se queda igual aunque alguien apague el
+          equipo por otro lado.
+        </p>
+        <button className="btn-add" onClick={() => onChange({ deviceId: "", field: "" })}>
+          + Seguir el estado de un equipo
+        </button>
+      </>
+    );
+  }
+
+  // Claves que el equipo publica de verdad. `reachable` y `error` son del transporte, no del
+  // equipo: no se ofrecen como estado a reflejar.
+  const keys = Object.keys(status ?? {}).filter((k) => k !== "reachable" && k !== "error");
+  const current = status?.[state.field];
+
+  return (
+    <>
+      <h3>Feedback de estado</h3>
+
+      <Field label="Equipo a seguir">
+        <select
+          value={state.deviceId}
+          onChange={(e) => {
+            setStatus(null);
+            setError(null);
+            onChange({ ...state, deviceId: e.target.value, field: "" });
+            if (e.target.value) void readStatus(e.target.value);
+          }}
+        >
+          <option value="">— elige un equipo —</option>
+          {equipos.map((d) => (
+            <option key={d.id} value={d.id}>{d.id} ({d.driver})</option>
+          ))}
+        </select>
+      </Field>
+
+      {state.deviceId && (
+        <>
+          <Field label="Estado a reflejar">
+            <select value={state.field} onChange={(e) => onChange({ ...state, field: e.target.value })} disabled={keys.length === 0}>
+              <option value="">— elige un estado —</option>
+              {keys.map((k) => (
+                <option key={k} value={k}>{k} (ahora: {String(status?.[k])})</option>
+              ))}
+              {/* Un estado guardado que el equipo ya no publica: se conserva, pero se avisa. */}
+              {state.field && !keys.includes(state.field) && (
+                <option value={state.field}>{state.field} (sin confirmar)</option>
+              )}
+            </select>
+          </Field>
+
+          {comparaValor && state.field && (
+            <Field label="Se enciende cuando el estado vale">
+              <input
+                type="text"
+                placeholder={current !== undefined ? String(current) : "p. ej. true, on, hdmi1"}
+                value={state.activeWhen ?? ""}
+                onChange={(e) => onChange({ ...state, activeWhen: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {el.type === "label" && (
+            <p className="hint">
+              La etiqueta pinta el valor. Pon <code>{"{{value}}"}</code> en su texto para enmarcarlo
+              (<code>Volumen: {"{{value}}"}</code>); sin él, se sustituye el texto entero.
+            </p>
+          )}
+
+          <button className="btn-add" onClick={() => void readStatus(state.deviceId)} disabled={reading}>
+            {reading ? "Leyendo…" : status ? "Volver a leer el estado" : "Leer estado del equipo"}
+          </button>
+          {!status && !error && !reading && (
+            <p className="hint">Lee el estado del equipo para ver qué publica: cada driver publica lo suyo.</p>
+          )}
+          {error && <p className="msg err">{error}</p>}
+        </>
+      )}
+
+      <button className="btn-danger" onClick={() => onChange(undefined)}>
+        Quitar feedback de estado
+      </button>
+    </>
+  );
+}
+
 function ActionEditor({
   action,
   screens,
   devices,
   isSlider = false,
+  allowNavigate = true,
   onChange,
 }: {
   action: ElementAction;
   screens: Screen[];
   devices: DevicesState;
   isSlider?: boolean;
+  allowNavigate?: boolean;
   onChange: (a: ElementAction) => void;
 }) {
   const [newKey, setNewKey] = useState("");
@@ -242,7 +410,7 @@ function ActionEditor({
   if (action.type === "command") {
     return (
       <>
-        <TypeSelector value="command" onChange={switchType} />
+        <TypeSelector value="command" allowNavigate={allowNavigate} onChange={switchType} />
         <CommandEditor action={action} devices={devices} isSlider={isSlider} onChange={onChange} />
       </>
     );
@@ -251,7 +419,7 @@ function ActionEditor({
   if (action.type === "navigate") {
     return (
       <>
-        <TypeSelector value="navigate" onChange={switchType} />
+        <TypeSelector value="navigate" allowNavigate onChange={switchType} />
         <Field label="Pantalla destino">
           <select value={action.screenId} onChange={(e) => onChange({ type: "navigate", screenId: e.target.value })}>
             {screens.map((s) => (
@@ -289,7 +457,7 @@ function ActionEditor({
 
   return (
     <>
-      <TypeSelector value="http" onChange={switchType} />
+      <TypeSelector value="http" allowNavigate={allowNavigate} onChange={switchType} />
       <p className="hint">
         Ruta cruda contra el backend AV. jaso-rc solo expone <code>/api/devices/…</code>: úsalo
         únicamente para algo que el catálogo no cubra.
@@ -373,6 +541,51 @@ function SliderProps({ el, update }: { el: SliderElement; update: (p: ElementPat
         <select value={el.sendOn ?? "release"} onChange={(e) => update({ sendOn: e.target.value as "change" | "release" })}>
           <option value="release">Soltar (change)</option>
           <option value="change">Arrastrar (input)</option>
+        </select>
+      </Field>
+    </>
+  );
+}
+
+function CheckboxProps({ el, update }: { el: CheckboxElement; update: (p: ElementPatch) => void }) {
+  return (
+    <>
+      <Field label="Texto">
+        <input type="text" value={el.label} onChange={(e) => update({ label: e.target.value })} />
+      </Field>
+      <Field label="Estado inicial">
+        <select value={el.checked ? "on" : "off"} onChange={(e) => update({ checked: e.target.value === "on" })}>
+          <option value="off">Desmarcada</option>
+          <option value="on">Marcada</option>
+        </select>
+      </Field>
+    </>
+  );
+}
+
+/** El grupo es lo que hace excluyentes a los radios: mismo grupo = misma fila de la matriz. */
+function RadioProps({ el, groups, update }: { el: RadioElement; groups: string[]; update: (p: ElementPatch) => void }) {
+  return (
+    <>
+      <Field label="Texto">
+        <input type="text" value={el.label} onChange={(e) => update({ label: e.target.value })} />
+      </Field>
+      <Field label="Grupo (las opciones del mismo grupo se excluyen)">
+        <input
+          type="text"
+          list="radio-groups"
+          value={el.group}
+          onChange={(e) => update({ group: e.target.value })}
+          placeholder="salida-1"
+        />
+        <datalist id="radio-groups">
+          {groups.map((g) => <option key={g} value={g} />)}
+        </datalist>
+      </Field>
+      <Field label="Estado inicial">
+        <select value={el.selected ? "on" : "off"} onChange={(e) => update({ selected: e.target.value === "on" })}>
+          <option value="off">Sin seleccionar</option>
+          <option value="on">Seleccionada</option>
         </select>
       </Field>
     </>
@@ -464,6 +677,17 @@ function StyleEditor({ el, update }: { el: DesignElement; update: (p: ElementPat
 
 // ── Main panel ──
 
+const TITLES: Record<DesignElement["type"], string> = {
+  button: "Botón",
+  slider: "Slider",
+  image: "Imagen",
+  label: "Etiqueta",
+  line: "Línea",
+  rectangle: "Rectángulo",
+  checkbox: "Casilla",
+  radio: "Opción",
+};
+
 export function PropertiesPanel({ state }: Props) {
   const { design, designName, screenIndex, selectedElementId, updateElement, updateConfig, deleteElement, updateScreenBackground } = state;
 
@@ -514,10 +738,13 @@ export function PropertiesPanel({ state }: Props) {
   }
 
   const imageAction = el.type === "image" ? (el as ImageElement).action : undefined;
+  // Grupos ya usados en la pantalla: al añadir la cuarta entrada de una salida no hay que
+  // recordar cómo se escribió el grupo en las tres anteriores.
+  const radioGroups = [...new Set(screen.elements.filter((e): e is RadioElement => e.type === "radio").map((e) => e.group).filter(Boolean))];
 
   return (
     <div className="properties" onPointerDown={(e) => e.stopPropagation()}>
-      <h3>{el.type === "button" ? "Botón" : el.type === "slider" ? "Slider" : el.type === "image" ? "Imagen" : el.type === "line" ? "Línea" : el.type === "rectangle" ? "Rectángulo" : "Etiqueta"}</h3>
+      <h3>{TITLES[el.type]}</h3>
 
       <div className="row">
         <Field label="X"><input type="number" value={el.position.x} onChange={(e) => update({ position: { ...el.position, x: Number(e.target.value) } })} /></Field>
@@ -533,6 +760,57 @@ export function PropertiesPanel({ state }: Props) {
       {el.type === "image" && <ImageProps el={el} update={update} />}
       {el.type === "label" && <LabelProps el={el} update={update} />}
       {el.type === "line" && <LineProps el={el} update={update} />}
+      {el.type === "checkbox" && <CheckboxProps el={el} update={update} />}
+      {el.type === "radio" && <RadioProps el={el} groups={radioGroups} update={update} />}
+
+      {el.type === "radio" && (
+        <>
+          <h3>Acción al seleccionar</h3>
+          <ActionEditor
+            action={el.action}
+            screens={design.screens}
+            devices={devices}
+            allowNavigate={false}
+            onChange={updateAction}
+          />
+        </>
+      )}
+
+      {el.type === "checkbox" && (
+        <>
+          <h3>Acción al marcar</h3>
+          <ActionEditor
+            action={el.action}
+            screens={design.screens}
+            devices={devices}
+            allowNavigate={false}
+            onChange={updateAction}
+          />
+
+          <h3>Acción al desmarcar</h3>
+          {el.actionOff ? (
+            <>
+              <ActionEditor
+                action={el.actionOff}
+                screens={design.screens}
+                devices={devices}
+                allowNavigate={false}
+                onChange={(a) => update({ actionOff: a as BackendAction } as ElementPatch)}
+              />
+              <button className="btn-danger" onClick={() => update({ actionOff: undefined } as ElementPatch)}>
+                Quitar acción al desmarcar
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="hint">Sin ella, desmarcar no manda nada al equipo.</p>
+              <button className="btn-add" onClick={() => update({ actionOff: { type: "command", deviceId: "", command: "" } } as ElementPatch)}>
+                + Añadir acción al desmarcar
+              </button>
+            </>
+          )}
+        </>
+      )}
 
       {(el.type === "button" || el.type === "slider" || el.type === "image") && (
         <>
@@ -567,6 +845,15 @@ export function PropertiesPanel({ state }: Props) {
             )
           ) : null}
         </>
+      )}
+
+      {(el.type === "button" || el.type === "slider" || el.type === "checkbox" || el.type === "radio" || el.type === "label") && designName && (
+        <StateEditor
+          el={el}
+          designName={designName}
+          devices={devices}
+          onChange={(st) => update({ state: st } as ElementPatch)}
+        />
       )}
 
       <StyleEditor el={el} update={update} />

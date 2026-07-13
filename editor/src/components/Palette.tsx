@@ -32,6 +32,8 @@ export function Palette() {
       <h3>Componentes</h3>
       <PaletteItem type="button" label="Botón" icon="▱" />
       <PaletteItem type="slider" label="Slider" icon="═" />
+      <PaletteItem type="checkbox" label="Casilla" icon="☑" />
+      <PaletteItem type="radio" label="Opción" icon="◉" />
       <PaletteItem type="image" label="Imagen" icon="🖼" />
       <PaletteItem type="label" label="Etiqueta" icon="Aa" />
       <PaletteItem type="line" label="Línea" icon="—" />

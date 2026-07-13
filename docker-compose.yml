@@ -1,0 +1,21 @@
+services:
+  front-rc:
+    build: .
+    image: front-rc
+    # Puerto del host (HOST_PORT en el .env, 3000 por defecto). Dentro del contenedor la app
+    # sigue en el 3000: cambiar el de fuera no obliga a reconstruir la imagen.
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    # El .env no está dentro de la imagen (hornear el token de jaso-rc en una capa lo deja
+    # ahí para siempre): las variables entran en el entorno del contenedor al arrancar.
+    env_file:
+      - .env
+    # Diseños y assets son ficheros normales del host, no volúmenes de Docker: el backup es un
+    # tar o un rsync de ./data, sin tener que montar un contenedor auxiliar para sacarlos.
+    # El sufijo :z reetiqueta para SELinux (Fedora), o el contenedor no podría escribir.
+    volumes:
+      - ./data:/app/data:z
+      - ./generated:/app/generated:z
+    # El proceso escribe en los bind mounts: sin esto los ficheros saldrían como root en tu carpeta.
+    user: "1000:1000"
+    restart: unless-stopped

@@ -1,7 +1,7 @@
 import type express from "express";
 import { avToken } from "./config.ts";
 import { getDesign } from "./store.ts";
-import type { DeviceView } from "../schema/device.ts";
+import { MACRO_COMMAND, type DeviceView, type MacroView } from "../schema/device.ts";
 import type { Design } from "../schema/design.ts";
 
 // Tiempo máximo de espera al backend AV. jaso-rc caduca un `status` a los 5 s y un comando a
@@ -102,7 +102,72 @@ export async function avDevices(req: express.Request, res: express.Response): Pr
       return;
     }
     const data = (await upstream.json()) as { devices?: DeviceView[] };
-    res.json({ devices: data.devices ?? [] });
+    const devices = (data.devices ?? []).map((d) => ({ ...d, kind: "device" as const }));
+    res.json({ devices: [...devices, ...(await macrosAsDevices(design))] });
+  } catch (err) {
+    if (err instanceof NoTokenError) {
+      res.status(503).json({ error: err.message });
+      return;
+    }
+    res.status(502).json({ error: `No se pudo contactar con ${design.config.baseUrl}` });
+  }
+}
+
+/**
+ * Las macros de `GET /api/macros`, vestidas de equipo para que entren por el mismo desplegable.
+ * Cada una expone un único comando —ejecutarla—; `kind: "macro"` es lo que luego hace que el
+ * generador emita `POST /api/macros/{id}/run` en vez de la ruta de comandos.
+ *
+ * Un fallo aquí no tumba el catálogo: un jaso-rc sin macros (o anterior al endpoint) responde
+ * 404, y quedarse sin equipos por eso sería peor que quedarse sin macros.
+ */
+async function macrosAsDevices(design: Design): Promise<DeviceView[]> {
+  try {
+    const upstream = await callAv(design, "/api/macros");
+    if (!upstream.ok) {
+      console.error(`[AV] GET /api/macros → ${upstream.status}: se sirve el catálogo sin macros`);
+      return [];
+    }
+    const data = (await upstream.json()) as { macros?: MacroView[] };
+    return (data.macros ?? [])
+      .filter((m) => typeof m.id === "string" && m.id !== "")
+      .map((m) => ({
+        id: m.id,
+        driver: m.name ?? "macro",
+        host: "",
+        port: 0,
+        commands: [MACRO_COMMAND],
+        kind: "macro" as const,
+      }));
+  } catch (err) {
+    console.error("[AV] no se pudieron leer las macros:", (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Estado de un equipo, para el editor. Es lo que permite configurar el feedback sin adivinar:
+ * las claves de `status` (power, input, level…) **dependen del driver** y la API no las publica
+ * en ningún catálogo, así que la única fuente fiable es preguntarle al equipo de verdad y
+ * ofrecer las que ha devuelto.
+ */
+export async function avDeviceStatus(req: express.Request, res: express.Response): Promise<void> {
+  const design = getDesign(String(req.params.name));
+  if (!design) {
+    res.status(404).json({ error: "Diseño no encontrado" });
+    return;
+  }
+
+  try {
+    const upstream = await callAv(design, `/api/devices/${encodeURIComponent(String(req.params.id))}/status`);
+    if (!upstream.ok) {
+      const detail = await upstream.text();
+      res.status(upstream.status).json({ error: avErrorMessage(upstream.status, detail) });
+      return;
+    }
+    // Se reenvía tal cual, incluido el caso de equipo inalcanzable: es un 200 con
+    // { reachable: false, error }, no un error HTTP, y el editor sabe distinguirlo.
+    res.json(await upstream.json());
   } catch (err) {
     if (err instanceof NoTokenError) {
       res.status(503).json({ error: err.message });

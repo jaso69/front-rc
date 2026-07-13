@@ -33,6 +33,11 @@ export interface DeviceCommandAction {
   command: string;
   /** Solo en comandos parametrizados. En un slider vale "{{value}}". */
   value?: string;
+  /**
+   * Una macro se elige en el mismo desplegable que los equipos, pero se dispara con `POST
+   * /api/macros/{id}/run`. Ausente en los diseños anteriores a las macros: equivale a "device".
+   */
+  kind?: "device" | "macro";
 }
 
 export interface NavigateAction {

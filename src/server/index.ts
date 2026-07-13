@@ -4,15 +4,18 @@ import path from "node:path";
 import { deleteDesign, getDesign, listDesigns, saveDesign } from "./store.ts";
 import { generateAndWrite, generatedDir } from "./generate.ts";
 import { assetsDir, deleteAsset, listAssets, saveAsset } from "./assets.ts";
-import { allowSelfSignedTls, avToken, editorPassword } from "./config.ts";
-import { avDevices, avHealth, avProxy } from "./av.ts";
+import { allowSelfSignedTls, avToken, editorPassword, serverPort } from "./config.ts";
+import { avDevices, avDeviceStatus, avHealth, avProxy } from "./av.ts";
 import { login, logout, requireAuth, session } from "./auth.ts";
+import { buildBackup, restoreBackup, type RestoreMode } from "./backup.ts";
 import type { Design } from "../schema/design.ts";
 
 const app = express();
-const PORT = 3000;
+const PORT = serverPort();
 
-app.use(express.json({ limit: "5mb" }));
+// Una copia de seguridad lleva todos los assets en base64: con el límite de 5 MB de un diseño
+// suelto, restaurar un servidor con cuatro fotos de fondo daría 413.
+app.use(express.json({ limit: "100mb" }));
 
 // ── Assets estáticos (imágenes subidas) ──
 // Se registra ANTES que el editor para que /assets/<img> se sirva desde data/assets/
@@ -101,6 +104,7 @@ app.post("/api/designs/:name/generate", (req, res) => {
 // ── BFF hacia jaso-rc ──
 // Catálogo de equipos y prueba de conexión, para que el editor ofrezca listas cerradas.
 app.get("/api/designs/:name/devices", avDevices);
+app.get("/api/designs/:name/devices/:id/status", avDeviceStatus);
 app.get("/api/designs/:name/health", avHealth);
 
 // /av/:design/<endpoint>  → baseUrl del diseño + <endpoint>, con el Bearer del servidor.
@@ -136,6 +140,28 @@ app.delete("/api/assets/:filename", (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+// ── API: copias de seguridad ──
+
+// Descargar una copia completa (diseños + assets) como fichero JSON.
+app.get("/api/backup", (_req, res) => {
+  const backup = buildBackup();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Disposition", `attachment; filename="front-rc-backup-${stamp}.json"`);
+  res.send(JSON.stringify(backup));
+});
+
+// Restaurar una copia. `mode=replace` borra además los diseños que no vengan en ella.
+app.post("/api/backup/restore", (req, res) => {
+  const mode: RestoreMode = req.query.mode === "replace" ? "replace" : "merge";
+  try {
+    const result = restoreBackup(req.body, mode);
+    res.json({ ok: true, mode, ...result });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });
 
 // ── Diseños generados (sirve los estáticos al navegador/tablet) ──

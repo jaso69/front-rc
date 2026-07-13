@@ -8,6 +8,15 @@ if (fs.existsSync(ENV_FILE)) {
   process.loadEnvFile(ENV_FILE);
 }
 
+/**
+ * Puerto en el que escucha el servidor. En Docker no suele tocarse: lo que se cambia es el
+ * puerto publicado (`ports: "8080:3000"`), que no requiere reconstruir nada.
+ */
+export function serverPort(): number {
+  const raw = Number(process.env.PORT);
+  return Number.isInteger(raw) && raw > 0 && raw < 65536 ? raw : 3000;
+}
+
 /** Token de API de jaso-rc, o null si no hay ninguno configurado. */
 export function avToken(): string | null {
   const token = process.env.JASO_RC_TOKEN?.trim();

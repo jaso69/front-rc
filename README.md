@@ -18,18 +18,37 @@ Abre `http://localhost:3000` en el navegador.
 
 ### Docker
 
+Copia `.env.example` a `.env` y rellénalo antes de arrancar.
+
+```bash
+docker compose up -d --build
+```
+
+O sin compose:
+
 ```bash
 docker build -t front-rc .
 docker run -d -p 3000:3000 \
-  -v front-rc-data:/app/data \
-  -v front-rc-gen:/app/generated \
+  --env-file .env \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD/data:/app/data:z" \
+  -v "$PWD/generated:/app/generated:z" \
   front-rc
 ```
 
 Abre `http://localhost:3000` en el navegador.
 
-- El volumen `front-rc-data` persiste los diseños (`data/designs/`) y las imágenes subidas (`data/assets/`).
-- El volumen `front-rc-gen` persiste los diseños generados (`generated/`).
+- El `.env` **no** se copia dentro de la imagen: hornear el token de jaso-rc en una capa lo
+  deja ahí para siempre. Las variables entran en el entorno del contenedor al arrancar, con
+  `env_file` (compose) o `--env-file` (docker run). Sin ellas el editor arranca sin contraseña
+  y los paneles devuelven 503 al pulsar cualquier botón.
+- Los datos persisten en carpetas del host, no en volúmenes de Docker: `./data` (diseños en
+  `data/designs/`, imágenes y SVG en `data/assets/`) y `./generated` (paneles generados). El
+  backup es un `tar` o un `rsync` de esas carpetas, sin contenedores auxiliares de por medio.
+- El contenedor corre con tu UID/GID para que los ficheros que crea no salgan como `root`. Si
+  despliegas con otro usuario, ajusta `user:` en el compose.
+- La `baseUrl` del diseño debe ser una IP alcanzable **desde el contenedor**: `localhost` apunta
+  al propio contenedor, no a tu máquina.
 - Al arrancar sin diseños, siembra automáticamente un diseño de ejemplo ("salon").
 
 ## Flujo de uso
@@ -51,11 +70,12 @@ Abre `http://localhost:3000` en el navegador.
 | `npm run build:editor` | Compila el editor a `dist-editor/` |
 | `npm run typecheck` | Typecheck de backend + editor |
 | `docker build -t front-rc .` | Construye la imagen Docker |
-| `docker run -p 3000:3000 front-rc` | Ejecuta el contenedor (ver volúmenes arriba) |
+| `docker run -p 3000:3000 --env-file .env front-rc` | Ejecuta el contenedor (ver montajes arriba) |
+| `docker compose up -d --build` | Construye y arranca con `.env` y los montajes ya configurados |
 
 > Para producción: `npm run build:editor && npm start`
 > Para desarrollo: `npm start` en una terminal + `npm run dev` en otra (hot reload del editor).
-> Para despliegue: `docker build` + `docker run` con volúmenes (persistencia de diseños e imágenes).
+> Para despliegue: `docker compose up -d --build` (persistencia de diseños e imágenes en `./data`).
 
 ## Elementos
 
@@ -148,6 +168,42 @@ el valor del slider; en GET el payload va como query string y en el resto como b
 La URL base del backend AV se configura a nivel de diseño (campo "Backend AV" de la barra
 superior).
 
+## Feedback
+
+Dos cosas distintas, y conviene no confundirlas al mirar un panel:
+
+### Al pulsar (siempre, sin configurar nada)
+
+El elemento se marca mientras la orden viaja (`rc-busy`), y termina en verde (`rc-ok`) o en rojo
+(`rc-err`). Un comando AV no es instantáneo —viaja por red y acaba en un proyector que tarda en
+contestar—, y un botón que no acusa recibo se pulsa tres veces. Las macros mantienen el estado de
+"enviando" hasta que **la secuencia entera** termina, no hasta el 202.
+
+### El estado del equipo (opcional, por elemento)
+
+Sección **"Feedback de estado"** del panel de propiedades. El elemento sigue a un equipo y refleja
+lo que ese equipo dice de sí mismo (`GET /api/devices/{id}/status`, sondeado cada 5 s):
+
+| Elemento | Qué hace con el estado |
+|---|---|
+| **Botón** | Se ilumina (`rc-active`) cuando el valor coincide con el esperado |
+| **Casilla / opción** | Se marca y se desmarca sola siguiendo al equipo |
+| **Slider** | Se coloca en el valor real (no mientras lo arrastras: no se te mueve el dedo debajo) |
+| **Etiqueta** | Pinta el valor. Con `{{value}}` en su texto, lo enmarca: `Volumen: {{value}}` |
+
+Y en todos: **el equipo que no responde se ve apagado** (`rc-offline`, atenuado y en gris). Que un
+proyector esté apagado y que no conteste son cosas distintas, y llevan a mirar sitios distintos.
+
+Las claves de estado (`power`, `input`, `level`…) **las decide el driver** y la API no las publica
+en ningún catálogo, así que el editor no puede ofrecer una lista cerrada: el botón **"Leer estado
+del equipo"** le pregunta al equipo de verdad y ofrece las claves que ha devuelto, con su valor
+actual al lado. Si el equipo no publica una clave, el panel **no inventa** su estado: deja el
+elemento como está.
+
+El estado lo dice el equipo, no el botón: pulsar "encender" no pinta el botón de encendido, lo
+pinta el proyector cuando confirma que lo está. Es la diferencia entre un mando que informa y uno
+que miente en cuanto alguien enciende el proyector con el mando de la pared.
+
 ### Qué ve el usuario cuando algo falla
 
 jaso-rc devuelve todos los errores en el mismo sobre (`{"error": "..."}`), y el panel los
@@ -234,6 +290,23 @@ no la exigen.
 | `GET` | `/api/designs/:name/devices` | Catálogo de equipos del backend AV del diseño (llena los desplegables) |
 | `GET` | `/api/designs/:name/health` | Prueba de conexión: distingue URL caída, token inválido e IP no autorizada |
 | `*` | `/av/:name/*` | Proxy al backend AV del diseño, añadiendo el Bearer del servidor |
+| `GET` | `/api/backup` | Descargar copia de seguridad (diseños + assets, un JSON) |
+| `POST` | `/api/backup/restore?mode=merge\|replace` | Restaurar una copia |
+
+## Copias de seguridad
+
+En el selector de diseños, botón **Configuración**.
+
+- **Descargar copia**: un único fichero JSON con todos los diseños y los assets subidos. Los
+  paneles de `generated/` no van dentro: son derivados y se reconstruyen al restaurar.
+- **Restaurar**: sube el fichero y elige qué hacer con lo que ya hay. `Combinar` sobrescribe los
+  diseños con el mismo nombre y deja el resto; `Reemplazar` borra además los que no estén en la
+  copia (clonar un servidor entero). Los assets nunca se borran: los comparten varios diseños.
+- Al terminar, los paneles se regeneran solos, así que `/designs/<nombre>/` responde sin tener
+  que abrir cada diseño y darle a generar.
+
+Como los datos viven en `./data`, el backup del servidor entero también vale con un `tar` o un
+`rsync` de esa carpeta.
 
 ## Estructura del proyecto
 

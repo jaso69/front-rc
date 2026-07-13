@@ -11,6 +11,7 @@ import { useSession, type SessionState } from "./useSession.ts";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.ts";
 import { Login } from "./components/Login.tsx";
 import { DesignPicker } from "./components/DesignPicker.tsx";
+import { Settings } from "./components/Settings.tsx";
 import { Toolbar } from "./components/Toolbar.tsx";
 import { Palette } from "./components/Palette.tsx";
 import { Canvas } from "./components/Canvas.tsx";
@@ -31,6 +32,7 @@ export default function App() {
 function Editor({ session }: { session: SessionState }) {
   const state = useDesign();
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [view, setView] = useState<"designs" | "settings">("designs");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -70,11 +72,15 @@ function Editor({ session }: { session: SessionState }) {
   }
 
   if (!state.design) {
+    if (view === "settings") {
+      return <Settings onRestored={state.refreshList} onBack={() => setView("designs")} />;
+    }
     return (
       <DesignPicker
         designs={state.designs}
         onLoad={state.loadDesign}
         onNew={state.newDesign}
+        onSettings={() => setView("settings")}
         onLogout={session.passwordSet ? session.logout : undefined}
       />
     );

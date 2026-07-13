@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   ButtonElement,
+  CheckboxElement,
   Design,
   DesignConfig,
   DesignElement,
@@ -8,6 +9,7 @@ import type {
   ImageElement,
   LabelElement,
   LineElement,
+  RadioElement,
   RectangleElement,
   SliderElement,
 } from "@schema/design.ts";
@@ -17,7 +19,7 @@ import { createElement, createEmptyDesign, genScreenId } from "./factory.ts";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-export type ElementPatch = Partial<ButtonElement> | Partial<SliderElement> | Partial<ImageElement> | Partial<LabelElement> | Partial<LineElement> | Partial<RectangleElement>;
+export type ElementPatch = Partial<ButtonElement> | Partial<SliderElement> | Partial<ImageElement> | Partial<LabelElement> | Partial<LineElement> | Partial<RectangleElement> | Partial<CheckboxElement> | Partial<RadioElement>;
 
 export interface DesignState {
   design: Design | null;

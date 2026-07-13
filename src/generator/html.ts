@@ -54,10 +54,26 @@ function alignCss(el: LabelElement): string {
   }
 }
 
-function elementHtml(el: DesignElement): string {
+function elementHtml(el: DesignElement, screenId: string): string {
   const style = styleString(el.position, el.style);
 
   switch (el.type) {
+    case "checkbox":
+      return `      <label class="rc-check" style="${style}">
+        <input type="checkbox" id="${el.id}"${el.checked ? " checked" : ""}>
+        <span>${escapeHtml(el.label)}</span>
+      </label>`;
+
+    case "radio": {
+      // El name lleva la pantalla delante: todas las pantallas viven a la vez en el DOM, y dos
+      // matrices distintas que usaran el grupo "salida-1" se apagarían la una a la otra.
+      const name = `rc-${screenId}-${el.group}`;
+      return `      <label class="rc-radio" style="${style}">
+        <input type="radio" id="${el.id}" name="${escapeHtml(name)}"${el.selected ? " checked" : ""}>
+        <span>${escapeHtml(el.label)}</span>
+      </label>`;
+    }
+
     case "button":
       return `      <button id="${el.id}" class="rc-btn" style="${style}">${escapeHtml(el.label)}</button>`;
 
@@ -96,7 +112,7 @@ export function generateHtml(design: Design): string {
     .map((screen, i) => {
       const cls = i === 0 ? "screen active" : "screen";
       const bgAttr = screen.background ? ` style="${backgroundCss(screen.background)}"` : "";
-      const elements = screen.elements.map(elementHtml).join("\n");
+      const elements = screen.elements.map((el) => elementHtml(el, screen.id)).join("\n");
       return `    <div id="screen-${screen.id}" class="${cls}"${bgAttr}>
 ${elements}
     </div>`;
