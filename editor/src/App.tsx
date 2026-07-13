@@ -7,7 +7,9 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useDesign } from "./useDesign.ts";
+import { useSession, type SessionState } from "./useSession.ts";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.ts";
+import { Login } from "./components/Login.tsx";
 import { DesignPicker } from "./components/DesignPicker.tsx";
 import { Toolbar } from "./components/Toolbar.tsx";
 import { Palette } from "./components/Palette.tsx";
@@ -16,6 +18,17 @@ import { ScreenTabs } from "./components/ScreenTabs.tsx";
 import { PropertiesPanel } from "./components/PropertiesPanel.tsx";
 
 export default function App() {
+  const session = useSession();
+
+  // Mientras no se sabe si hay sesión no se pinta nada: montar el editor pediría los diseños y
+  // se llevaría un 401, y enseñar el login a quien ya estaba dentro es un parpadeo feo.
+  if (session.authenticated === null) return null;
+  if (!session.authenticated) return <Login session={session} />;
+
+  return <Editor session={session} />;
+}
+
+function Editor({ session }: { session: SessionState }) {
   const state = useDesign();
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
@@ -62,6 +75,7 @@ export default function App() {
         designs={state.designs}
         onLoad={state.loadDesign}
         onNew={state.newDesign}
+        onLogout={session.passwordSet ? session.logout : undefined}
       />
     );
   }
@@ -77,6 +91,7 @@ export default function App() {
               design={state.design}
               screenIndex={state.screenIndex}
               selectedElementId={state.selectedElementId}
+              showGrid={state.showGrid}
               onSelectElement={state.selectElement}
               onUpdateElement={state.updateElement}
             />

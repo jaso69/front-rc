@@ -10,7 +10,7 @@ export function generateAndWrite(design: Design, name: string): string[] {
   const dir = path.join(GENERATED_DIR, safe);
   fs.mkdirSync(dir, { recursive: true });
 
-  const files = generateDesign(design);
+  const files = generateDesign(design, safe);
   const written: string[] = [];
   for (const [filename, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, filename), content);

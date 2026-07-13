@@ -89,6 +89,20 @@ body {
   outline: none;
   touch-action: none;
 }
+/* Slider vertical. writing-mode es la forma estándar de girar un input[type=range] (Chrome 119+,
+   Firefox 120+); direction rtl pone el mínimo abajo, que es lo que espera cualquiera que haya
+   tocado un fader. El orient="vertical" del HTML cubre a los Firefox antiguos. */
+.rc-slider.vertical {
+  align-items: center;
+}
+.rc-slider.vertical input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 8px;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
 .rc-slider input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;

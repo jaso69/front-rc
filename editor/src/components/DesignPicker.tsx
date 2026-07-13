@@ -4,6 +4,8 @@ interface Props {
   designs: string[];
   onLoad: (name: string) => void;
   onNew: (name: string, width: number, height: number) => void;
+  /** Ausente si el editor va sin contraseña: no hay sesión que cerrar. */
+  onLogout?: () => void;
 }
 
 const PRESETS = [
@@ -29,7 +31,7 @@ const PRESETS = [
   { label: "Banner horizontal (1920×600)", width: 1920, height: 600 },
 ];
 
-export function DesignPicker({ designs, onLoad, onNew }: Props) {
+export function DesignPicker({ designs, onLoad, onNew, onLogout }: Props) {
   const [name, setName] = useState("");
   const [preset, setPreset] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,9 @@ export function DesignPicker({ designs, onLoad, onNew }: Props) {
   return (
     <div className="picker">
       <h1>Editor RC</h1>
+      {onLogout && (
+        <button className="btn logout" onClick={onLogout}>Cerrar sesión</button>
+      )}
 
       {designs.length > 0 && (
         <>

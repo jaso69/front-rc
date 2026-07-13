@@ -31,6 +31,10 @@ function styleString(pos: Position, style?: ElementStyle): string {
   return parts.join(";");
 }
 
+function isSvgSrc(src: string): boolean {
+  return /\.svg(\?|#|$)/i.test(src);
+}
+
 function backgroundCss(bg: Background): string {
   switch (bg.type) {
     case "color":
@@ -57,14 +61,24 @@ function elementHtml(el: DesignElement): string {
     case "button":
       return `      <button id="${el.id}" class="rc-btn" style="${style}">${escapeHtml(el.label)}</button>`;
 
-    case "slider":
-      return `      <div class="rc-slider" style="${style}">
+    case "slider": {
+      const vertical = el.orientation === "vertical";
+      return `      <div class="rc-slider${vertical ? " vertical" : ""}" style="${style}">
         ${el.label ? `<label for="${el.id}">${escapeHtml(el.label)}</label>` : ""}
-        <input type="range" id="${el.id}" min="${el.min}" max="${el.max}" step="${el.step}" value="${el.value}">
+        <input type="range" id="${el.id}"${vertical ? ' orient="vertical"' : ""} min="${el.min}" max="${el.max}" step="${el.step}" value="${el.value}">
       </div>`;
+    }
 
-    case "image":
+    case "image": {
+      // Un <img> pinta el SVG con sus colores propios y el color de fondo solo asoma por detrás.
+      // Con una máscara el SVG pasa a ser silueta y el background-color lo tiñe, que es lo que
+      // se espera al darle color a un icono.
+      if (isSvgSrc(el.src) && el.style?.backgroundColor) {
+        const mask = `-webkit-mask:url('${el.src}') center/contain no-repeat;mask:url('${el.src}') center/contain no-repeat`;
+        return `      <div id="${el.id}" class="rc-img" style="${style};${mask}"></div>`;
+      }
       return `      <img id="${el.id}" class="rc-img" src="${el.src}" alt="" style="${style}">`;
+    }
 
     case "label":
       return `      <div id="${el.id}" class="rc-label" style="${style};${alignCss(el)}">${escapeHtml(el.text)}</div>`;

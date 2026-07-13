@@ -1,8 +1,10 @@
 import { useState } from "react";
-import type { ElementAction, HttpAction, HttpMethod, NavigateAction } from "@schema/action.ts";
+import type { DeviceCommandAction, ElementAction, HttpAction, HttpMethod, NavigateAction } from "@schema/action.ts";
 import type { Background } from "@schema/style.ts";
 import type { ButtonElement, Design, DesignElement, ImageElement, LabelElement, LineElement, Screen, SliderElement } from "@schema/design.ts";
 import type { DesignState, ElementPatch } from "../useDesign.ts";
+import type { DevicesState } from "../useDevices.ts";
+import { useDevices } from "../useDevices.ts";
 import { AssetPicker } from "./AssetPicker.tsx";
 
 // Normaliza un valor hex para el input type="color" (requiere #rrggbb).
@@ -109,9 +111,117 @@ function BackgroundEditor({ bg, onChange }: { bg: Background | undefined; onChan
   );
 }
 
-// ── Action editor (http or navigate) ──
+// ── Action editor (comando de equipo, HTTP crudo o navegación) ──
 
-function ActionEditor({ action, screens, onChange }: { action: ElementAction; screens: Screen[]; onChange: (a: ElementAction) => void }) {
+type ActionKind = "command" | "http" | "navigate";
+
+function TypeSelector({ value, onChange }: { value: ActionKind; onChange: (k: ActionKind) => void }) {
+  return (
+    <Field label="Tipo de acción">
+      <select value={value} onChange={(e) => onChange(e.target.value as ActionKind)}>
+        <option value="command">Comando de equipo</option>
+        <option value="navigate">Navegar a pantalla</option>
+        <option value="http">Petición HTTP (avanzado)</option>
+      </select>
+    </Field>
+  );
+}
+
+/**
+ * Editor de comandos contra jaso-rc. Equipo y comando salen del catálogo del backend
+ * (`GET /api/devices`), que es la única fuente que dice qué se puede ejecutar: escribirlos a
+ * mano solo sirve para descubrir el 404 en la sala, con la reunión empezando.
+ */
+function CommandEditor({
+  action,
+  devices,
+  isSlider,
+  onChange,
+}: {
+  action: DeviceCommandAction;
+  devices: DevicesState;
+  isSlider: boolean;
+  onChange: (a: ElementAction) => void;
+}) {
+  const device = devices.devices.find((d) => d.id === action.deviceId);
+  // Un comando guardado que ya no está en el equipo: el integrador lo renombró o lo quitó.
+  const unknownCommand = Boolean(action.command) && Boolean(device) && !device!.commands.includes(action.command);
+
+  function setCommand(patch: Partial<DeviceCommandAction>) {
+    onChange({ ...action, ...patch });
+  }
+
+  return (
+    <>
+      <Field label="Equipo">
+        <select
+          value={action.deviceId}
+          onChange={(e) => {
+            // Cambiar de equipo invalida el comando: cada equipo tiene los suyos.
+            const next = devices.devices.find((d) => d.id === e.target.value);
+            setCommand({ deviceId: e.target.value, command: next?.commands[0] ?? "" });
+          }}
+        >
+          <option value="">— elige un equipo —</option>
+          {devices.devices.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.id} ({d.driver})
+            </option>
+          ))}
+          {action.deviceId && !device && <option value={action.deviceId}>{action.deviceId} (no está en el backend)</option>}
+        </select>
+      </Field>
+
+      <Field label="Comando">
+        <select value={action.command} onChange={(e) => setCommand({ command: e.target.value })} disabled={!device}>
+          <option value="">— elige un comando —</option>
+          {device?.commands.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+          {unknownCommand && <option value={action.command}>{action.command} (ya no existe)</option>}
+        </select>
+      </Field>
+
+      {isSlider ? (
+        // El slider siempre manda su valor; jaso-rc lo espera en `value` y como número.
+        <p className="hint">Envía <code>{"{ value: <posición del slider> }"}</code> al comando.</p>
+      ) : (
+        <Field label="Valor (solo comandos parametrizados: faders, nivel DALI)">
+          <input
+            type="text"
+            placeholder="vacío = sin parámetro"
+            value={action.value ?? ""}
+            onChange={(e) => setCommand({ value: e.target.value === "" ? undefined : e.target.value })}
+          />
+        </Field>
+      )}
+
+      {devices.loading && <p className="hint">Consultando el backend AV…</p>}
+      {devices.error && (
+        <p className="msg err">
+          {devices.error} <button className="btn-add" onClick={devices.reload}>Reintentar</button>
+        </p>
+      )}
+      {!devices.loading && !devices.error && devices.devices.length === 0 && (
+        <p className="hint">El backend AV no tiene equipos dados de alta.</p>
+      )}
+    </>
+  );
+}
+
+function ActionEditor({
+  action,
+  screens,
+  devices,
+  isSlider = false,
+  onChange,
+}: {
+  action: ElementAction;
+  screens: Screen[];
+  devices: DevicesState;
+  isSlider?: boolean;
+  onChange: (a: ElementAction) => void;
+}) {
   const [newKey, setNewKey] = useState("");
   const [newVal, setNewVal] = useState("");
 
@@ -119,23 +229,29 @@ function ActionEditor({ action, screens, onChange }: { action: ElementAction; sc
     onChange({ ...(action as HttpAction), ...patch });
   }
 
-  function switchType(type: "http" | "navigate") {
-    if (type === "http") {
+  function switchType(type: ActionKind) {
+    if (type === "command") {
+      onChange({ type: "command", deviceId: "", command: "", ...(isSlider ? { value: "{{value}}" } : {}) });
+    } else if (type === "http") {
       onChange({ type: "http", endpoint: "/api/", method: "POST" });
     } else {
       onChange({ type: "navigate", screenId: screens[0]?.id ?? "" });
     }
   }
 
+  if (action.type === "command") {
+    return (
+      <>
+        <TypeSelector value="command" onChange={switchType} />
+        <CommandEditor action={action} devices={devices} isSlider={isSlider} onChange={onChange} />
+      </>
+    );
+  }
+
   if (action.type === "navigate") {
     return (
       <>
-        <Field label="Tipo de acción">
-          <select value="navigate" onChange={(e) => switchType(e.target.value as "http" | "navigate")}>
-            <option value="http">Petición HTTP</option>
-            <option value="navigate">Navegar a pantalla</option>
-          </select>
-        </Field>
+        <TypeSelector value="navigate" onChange={switchType} />
         <Field label="Pantalla destino">
           <select value={action.screenId} onChange={(e) => onChange({ type: "navigate", screenId: e.target.value })}>
             {screens.map((s) => (
@@ -147,7 +263,7 @@ function ActionEditor({ action, screens, onChange }: { action: ElementAction; sc
     );
   }
 
-  const http = action as HttpAction;
+  const http = action;
   const entries: [string, string][] = http.payload ? Object.entries(http.payload) : [];
 
   function updatePayload(key: string, value: string) {
@@ -173,12 +289,11 @@ function ActionEditor({ action, screens, onChange }: { action: ElementAction; sc
 
   return (
     <>
-      <Field label="Tipo de acción">
-        <select value="http" onChange={(e) => switchType(e.target.value as "http" | "navigate")}>
-          <option value="http">Petición HTTP</option>
-          <option value="navigate">Navegar a pantalla</option>
-        </select>
-      </Field>
+      <TypeSelector value="http" onChange={switchType} />
+      <p className="hint">
+        Ruta cruda contra el backend AV. jaso-rc solo expone <code>/api/devices/…</code>: úsalo
+        únicamente para algo que el catálogo no cubra.
+      </p>
       <Field label="Endpoint">
         <input type="text" value={http.endpoint} onChange={(e) => setHttp({ endpoint: e.target.value })} />
       </Field>
@@ -223,10 +338,28 @@ function ButtonProps({ el, update }: { el: ButtonElement; update: (p: ElementPat
 }
 
 function SliderProps({ el, update }: { el: SliderElement; update: (p: ElementPatch) => void }) {
+  const orientation = el.orientation ?? "horizontal";
+
+  function setOrientation(next: "horizontal" | "vertical") {
+    if (next === orientation) return;
+    // Girar el slider gira también su caja: un fader vertical dentro de un rectángulo de
+    // 280×60 saldría aplastado, y nadie quiere reajustar el tamaño a mano cada vez.
+    update({
+      orientation: next,
+      position: { ...el.position, width: el.position.height, height: el.position.width },
+    } as ElementPatch);
+  }
+
   return (
     <>
       <Field label="Etiqueta">
         <input type="text" value={el.label ?? ""} onChange={(e) => update({ label: e.target.value })} />
+      </Field>
+      <Field label="Orientación">
+        <select value={orientation} onChange={(e) => setOrientation(e.target.value as "horizontal" | "vertical")}>
+          <option value="horizontal">Horizontal</option>
+          <option value="vertical">Vertical (mínimo abajo)</option>
+        </select>
       </Field>
       <div className="row">
         <Field label="Mín"><input type="number" value={el.min} onChange={(e) => update({ min: Number(e.target.value) })} /></Field>
@@ -332,7 +465,10 @@ function StyleEditor({ el, update }: { el: DesignElement; update: (p: ElementPat
 // ── Main panel ──
 
 export function PropertiesPanel({ state }: Props) {
-  const { design, screenIndex, selectedElementId, updateElement, updateConfig, deleteElement, updateScreenBackground } = state;
+  const { design, designName, screenIndex, selectedElementId, updateElement, updateConfig, deleteElement, updateScreenBackground } = state;
+
+  // Antes de cualquier return: el catálogo se pide una vez por diseño, no por elemento.
+  const devices = useDevices(designName, design?.config.baseUrl);
 
   if (!design) return null;
   const screen = design.screens[screenIndex];
@@ -401,20 +537,19 @@ export function PropertiesPanel({ state }: Props) {
       {(el.type === "button" || el.type === "slider" || el.type === "image") && (
         <>
           <h3>Acción</h3>
-          {el.type === "image" && !(el as ImageElement).action ? (
-            <button className="btn-add" onClick={() => update({ action: { type: "http", endpoint: "/api/", method: "POST" } } as ElementPatch)}>
-              + Añadir acción al pulsar
-            </button>
-          ) : el.type === "slider" ? (
+          {el.type === "slider" ? (
             <ActionEditor
               action={(el as SliderElement).action}
               screens={design.screens}
+              devices={devices}
+              isSlider
               onChange={updateAction}
             />
           ) : el.type === "button" ? (
             <ActionEditor
               action={(el as ButtonElement).action}
               screens={design.screens}
+              devices={devices}
               onChange={updateAction}
             />
           ) : el.type === "image" ? (
@@ -422,10 +557,11 @@ export function PropertiesPanel({ state }: Props) {
               <ActionEditor
                 action={imageAction}
                 screens={design.screens}
+                devices={devices}
                 onChange={updateAction}
               />
             ) : (
-              <button className="btn-add" onClick={() => update({ action: { type: "http", endpoint: "/api/", method: "POST" } } as ElementPatch)}>
+              <button className="btn-add" onClick={() => update({ action: { type: "command", deviceId: "", command: "" } } as ElementPatch)}>
                 + Añadir acción al pulsar
               </button>
             )

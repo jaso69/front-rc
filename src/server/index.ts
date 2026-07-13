@@ -4,6 +4,9 @@ import path from "node:path";
 import { deleteDesign, getDesign, listDesigns, saveDesign } from "./store.ts";
 import { generateAndWrite, generatedDir } from "./generate.ts";
 import { assetsDir, deleteAsset, listAssets, saveAsset } from "./assets.ts";
+import { allowSelfSignedTls, avToken, editorPassword } from "./config.ts";
+import { avDevices, avHealth, avProxy } from "./av.ts";
+import { login, logout, requireAuth, session } from "./auth.ts";
 import type { Design } from "../schema/design.ts";
 
 const app = express();
@@ -23,6 +26,16 @@ if (fs.existsSync(editorDir)) {
 } else {
   console.warn("⚠ Editor no compilado. Ejecuta `npm run build:editor` primero.");
 }
+
+// ── Sesión del editor ──
+// El bundle del editor se sirve a cualquiera (no lleva secretos: es una carcasa vacía), pero
+// sin sesión la API no le contesta y lo único que puede pintar es la pantalla de login.
+app.post("/api/login", login);
+app.post("/api/logout", logout);
+app.get("/api/session", session);
+
+// Todo lo demás bajo /api es el editor trabajando: exige sesión.
+app.use("/api", requireAuth);
 
 // ── API: diseños ──
 
@@ -84,6 +97,14 @@ app.post("/api/designs/:name/generate", (req, res) => {
   const files = generateAndWrite(design, req.params.name);
   res.json({ ok: true, files, url: `/designs/${req.params.name}/` });
 });
+
+// ── BFF hacia jaso-rc ──
+// Catálogo de equipos y prueba de conexión, para que el editor ofrezca listas cerradas.
+app.get("/api/designs/:name/devices", avDevices);
+app.get("/api/designs/:name/health", avHealth);
+
+// /av/:design/<endpoint>  → baseUrl del diseño + <endpoint>, con el Bearer del servidor.
+app.all(/^\/av\/([\w-]+)\/(.*)$/, avProxy);
 
 // ── API: assets ──
 
@@ -157,10 +178,23 @@ function serveGenerated(name: string, file: string, res: express.Response): void
 }
 
 export function startServer(): void {
+  if (allowSelfSignedTls()) {
+    // Afecta a todo el proceso, no solo a jaso-rc. Solo para la LAN de control.
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    console.warn("⚠ JASO_RC_INSECURE_TLS=true: no se validan los certificados TLS.");
+  }
+  if (!avToken()) {
+    console.warn("⚠ Sin JASO_RC_TOKEN en .env: los paneles recibirán 503 al llamar al backend AV.");
+  }
+  if (!editorPassword()) {
+    console.warn("⚠ Sin EDITOR_PASSWORD en .env: el editor está abierto a cualquiera que llegue al puerto.");
+  }
+
   app.listen(PORT, () => {
     console.log(`Servidor local → http://localhost:${PORT}`);
     console.log(`  Editor:        http://localhost:${PORT}/`);
     console.log(`  Diseños:       http://localhost:${PORT}/designs/<nombre>/`);
     console.log(`  API:           http://localhost:${PORT}/api/designs`);
+    console.log(`  Backend AV:    http://localhost:${PORT}/av/<nombre>/<endpoint>`);
   });
 }

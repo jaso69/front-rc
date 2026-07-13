@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function Toolbar({ state, generatedUrl, onGenerated }: Props) {
-  const { design, designName, dirty, saveStatus, errorMsg, save, generate, closeDesign, snapToGrid, setSnapToGrid } = state;
+  const { design, designName, dirty, saveStatus, errorMsg, save, generate, closeDesign, showGrid, setShowGrid, snapToGrid, setSnapToGrid } = state;
   const [generating, setGenerating] = useState(false);
 
   async function handleGenerate() {
@@ -41,9 +41,14 @@ export function Toolbar({ state, generatedUrl, onGenerated }: Props) {
 
       <div className="spacer" />
 
+      <label style={{ fontSize: 12, color: showGrid ? "#5af" : "#666", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+        <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} style={{ cursor: "pointer" }} />
+        Rejilla
+      </label>
+
       <label style={{ fontSize: 12, color: snapToGrid ? "#5af" : "#666", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
         <input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} style={{ cursor: "pointer" }} />
-        Grid
+        Imantar
       </label>
 
       <label style={{ fontSize: 12, color: "#999" }}>Backend AV</label>

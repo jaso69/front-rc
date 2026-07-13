@@ -1,4 +1,4 @@
-import type { ElementAction, HttpAction } from "./action.ts";
+import type { BackendAction, ElementAction } from "./action.ts";
 import type { Background, CanvasSize, ElementStyle, Position } from "./style.ts";
 
 // ──────────────────────────────────────────────
@@ -39,9 +39,11 @@ export interface SliderElement extends BaseElement {
   max: number;
   step: number;
   value: number;
+  /** Por defecto "horizontal". En vertical, el mínimo queda abajo. */
+  orientation?: "horizontal" | "vertical";
   /** Momento en el que se dispara la acción. Por defecto "release". */
   sendOn?: "change" | "release";
-  action: HttpAction;
+  action: BackendAction;
 }
 
 export interface ImageElement extends BaseElement {

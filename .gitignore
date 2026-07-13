@@ -8,3 +8,4 @@ data/assets/*
 !data/assets/*.svg
 *.log
 .DS_Store
+.env

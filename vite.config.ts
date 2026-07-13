@@ -19,6 +19,7 @@ export default defineConfig({
       "/api": "http://localhost:3000",
       "/assets": "http://localhost:3000",
       "/designs": "http://localhost:3000",
+      "/av": "http://localhost:3000",
     },
   },
 });

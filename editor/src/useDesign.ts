@@ -28,6 +28,8 @@ export interface DesignState {
   dirty: boolean;
   saveStatus: SaveStatus;
   errorMsg: string | null;
+  showGrid: boolean;
+  setShowGrid: (v: boolean) => void;
   snapToGrid: boolean;
   setSnapToGrid: (v: boolean) => void;
   loadDesign: (name: string) => Promise<void>;
@@ -58,6 +60,7 @@ export function useDesign(): DesignState {
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showGrid, setShowGrid] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
 
   const GRID_SIZE = 10;
@@ -327,6 +330,8 @@ export function useDesign(): DesignState {
     dirty,
     saveStatus,
     errorMsg,
+    showGrid,
+    setShowGrid,
     snapToGrid,
     setSnapToGrid,
     loadDesign,

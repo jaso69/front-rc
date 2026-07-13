@@ -62,7 +62,7 @@ Abre `http://localhost:3000` en el navegador.
 | Tipo | Props | Acción |
 |---|---|---|
 | **Botón** | texto, estilo | HTTP o navegación |
-| **Slider** | min/max/step/valor, etiqueta, envío en soltar o arrastrar | HTTP (con `{{value}}`) |
+| **Slider** | orientación (horizontal/vertical), min/max/step/valor, etiqueta, envío en soltar o arrastrar | Comando con `value` |
 | **Imagen** | URL (selector de assets integrado) | HTTP o navegación (opcional) |
 | **Etiqueta** | texto, alineación | no interactiva |
 | **Línea** | orientación (horizontal/vertical), color, grosor | decorativa (no interactiva) |
@@ -102,20 +102,96 @@ Para usarlos: arrastra un elemento **Imagen** al lienzo, pulsa **Examinar** y se
 
 ## Acciones
 
-### Petición HTTP
+### Comando de equipo (la habitual)
+
+```json
+{
+  "type": "command",
+  "deviceId": "monitor",
+  "command": "power_on"
+}
+```
+
+Se traduce a `POST /api/devices/monitor/commands/power_on`, que es la forma real de la API de
+jaso-rc. El editor **no te deja teclear el nombre**: lo saca del catálogo del propio backend
+(`GET /api/devices`), así que solo puedes elegir equipos y comandos que existen.
+
+Los comandos parametrizados (faders de una Midas, nivel DALI) llevan `value`, y un slider lo
+rellena con su posición:
+
+```json
+{
+  "type": "command",
+  "deviceId": "midas",
+  "command": "main_fader",
+  "value": "{{value}}"
+}
+```
+
+Va en el cuerpo JSON y **como número**: por `GET` todo llegaría al driver como string y un
+fader lo rechazaría. El rango del slider es el del comando (un fader de la Midas es 0–1, no
+0–100).
+
+### Petición HTTP (avanzado)
 
 ```json
 {
   "type": "http",
-  "endpoint": "/api/volume",
-  "method": "POST",
-  "payload": { "level": "{{value}}" }
+  "endpoint": "/api/devices/monitor/status",
+  "method": "GET"
 }
 ```
 
-- `{{value}}` se interpola con el valor del slider en tiempo de ejecución.
-- GET envía el payload como query string; el resto como body JSON.
-- La URL base del backend AV se configura a nivel de diseño.
+Ruta cruda contra el backend AV, para lo que el catálogo no cubra. `{{value}}` se interpola con
+el valor del slider; en GET el payload va como query string y en el resto como body JSON.
+
+La URL base del backend AV se configura a nivel de diseño (campo "Backend AV" de la barra
+superior).
+
+### Qué ve el usuario cuando algo falla
+
+jaso-rc devuelve todos los errores en el mismo sobre (`{"error": "..."}`), y el panel los
+traduce a un aviso legible. Lo importante: **un 502 no es "el sistema está roto", es "el equipo
+no responde"** —proyector apagado de la pared, cable suelto—, y es el error más frecuente en
+producción. Un equipo inalcanzable, además, no siempre es un error HTTP: `/status` responde
+**200** con `{"reachable": false, "error": "..."}`.
+
+## Acceso al editor
+
+El editor (`http://localhost:3000/`) pide contraseña: la de `EDITOR_PASSWORD` en el `.env`. Al
+entrar se guarda una cookie de sesión (`httpOnly`, `SameSite=Strict`, 12 h de caducidad
+absoluta). Sin sesión, **toda** la API de diseños responde 401.
+
+Las sesiones viven en memoria: reiniciar el servidor obliga a volver a entrar. Y si no pones
+`EDITOR_PASSWORD`, el editor queda **abierto** a cualquiera que llegue al puerto — el servidor
+lo avisa por consola al arrancar, en vez de fingir que está protegido.
+
+**Los paneles generados no piden contraseña, y es a propósito**: una tablet colgada en la pared
+no puede escribirla. `/designs/…`, sus imágenes y el proxy `/av/…` quedan abiertos, así que
+quien alcance el puerto 3000 puede mandar comandos a los equipos aunque no sepa la contraseña
+del editor. La frontera que compra el login es *quién puede diseñar y ver la instalación*, no
+*quién puede pulsar un botón*: para eso, la defensa es la red (una VLAN de control, y
+`allow_cidrs` en jaso-rc). Es la misma separación que hace jaso-rc: cookie para las personas,
+token para las máquinas.
+
+## Autenticación contra jaso-rc
+
+`/api/**` de jaso-rc exige `Authorization: Bearer <token>` y devuelve 401 sin él. El panel
+generado **no lleva el token**: llama a `/av/<diseño>/<endpoint>` en su propio origen, y este
+servidor reenvía a la `baseUrl` del diseño poniendo el Bearer. Así la credencial no viaja a la
+tablet y, de paso, la petición del panel es *same-origin* (sin CORS ni preflight).
+
+Configúralo en `.env` (copia de `.env.example`, no se versiona):
+
+| Variable | Para qué |
+|---|---|
+| `JASO_RC_TOKEN` | Token de API de jaso-rc (`jaso-rc -gen-token NOMBRE`). Sin él, los paneles reciben 503. |
+| `JASO_RC_INSECURE_TLS` | `true` si jaso-rc usa certificado autofirmado. Desactiva la validación TLS de todo el proceso. |
+| `EDITOR_PASSWORD` | Contraseña del editor. Vacía = editor abierto. |
+| `EDITOR_SESSION_TTL_HOURS` | Caducidad de la sesión (12 por defecto). |
+| `EDITOR_SECURE_COOKIES` | `true` si sirves el editor por HTTPS. |
+
+Un token `readonly` da 403 al ejecutar comandos: úsalo para paneles de solo visualización.
 
 ### Navegación entre pantallas
 
@@ -138,8 +214,14 @@ Cambia la pantalla visible sin recargar la página.
 
 ## API REST
 
+Todo `/api/**` exige sesión, salvo el login. Los paneles (`/designs/**`, `/assets/**`, `/av/**`)
+no la exigen.
+
 | Método | Ruta | Descripción |
 |---|---|---|
+| `POST` | `/api/login` | Iniciar sesión (contraseña en el cuerpo). Abierto |
+| `POST` | `/api/logout` | Cerrar sesión. Abierto |
+| `GET` | `/api/session` | ¿Hay sesión? ¿Hay contraseña configurada? Abierto |
 | `GET` | `/api/designs` | Listar diseños |
 | `GET` | `/api/designs/:name` | Obtener un diseño (JSON) |
 | `PUT` | `/api/designs/:name` | Crear o actualizar |
@@ -149,6 +231,9 @@ Cambia la pantalla visible sin recargar la página.
 | `POST` | `/api/assets` | Subir una imagen (base64) |
 | `DELETE` | `/api/assets/:filename` | Borrar una imagen |
 | `GET` | `/assets/:filename` | Servir imagen estática |
+| `GET` | `/api/designs/:name/devices` | Catálogo de equipos del backend AV del diseño (llena los desplegables) |
+| `GET` | `/api/designs/:name/health` | Prueba de conexión: distingue URL caída, token inválido e IP no autorizada |
+| `*` | `/av/:name/*` | Proxy al backend AV del diseño, añadiendo el Bearer del servidor |
 
 ## Estructura del proyecto
 

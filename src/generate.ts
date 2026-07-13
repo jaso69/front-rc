@@ -6,7 +6,7 @@ import { exampleDesign } from "./schema/example.ts";
 const outDir = path.join(import.meta.dirname, "..", "dist-test");
 fs.mkdirSync(outDir, { recursive: true });
 
-const files = generateDesign(exampleDesign);
+const files = generateDesign(exampleDesign, "salon");
 
 for (const [name, content] of Object.entries(files)) {
   fs.writeFileSync(path.join(outDir, name), content);

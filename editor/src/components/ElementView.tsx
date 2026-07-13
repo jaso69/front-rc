@@ -3,6 +3,10 @@ import type { ButtonElement, DesignElement, ImageElement, LabelElement, LineElem
 
 export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
+function isSvgSrc(src: string): boolean {
+  return /\.svg(\?|#|$)/i.test(src);
+}
+
 interface Props {
   element: DesignElement;
   selected: boolean;
@@ -28,8 +32,9 @@ function Preview({ element }: { element: DesignElement }) {
     }
     case "slider": {
       const sl = element as SliderElement;
+      const vertical = sl.orientation === "vertical";
       return (
-        <div className="slider-preview">
+        <div className={vertical ? "slider-preview vertical" : "slider-preview"}>
           {sl.label && <label>{sl.label}</label>}
           <input type="range" min={sl.min} max={sl.max} step={sl.step} defaultValue={sl.value} readOnly />
         </div>
@@ -37,10 +42,35 @@ function Preview({ element }: { element: DesignElement }) {
     }
     case "image": {
       const img = element as ImageElement;
-      if (img.src) {
-        return <img className="img-preview" src={img.src} alt="" draggable={false} />;
+      const s = img.style;
+      if (!img.src) return <div className="img-placeholder">Imagen</div>;
+      const box: React.CSSProperties = {
+        backgroundColor: s?.backgroundColor,
+        borderRadius: s?.borderRadius ?? 0,
+        border: s?.borderWidth ? `${s.borderWidth}px solid ${s.borderColor ?? "#666"}` : "none",
+        opacity: s?.opacity ?? 1,
+      };
+      // Mismo criterio que el generador: un SVG con color de fondo se tiñe con máscara en vez
+      // de pintarse como <img>, para que el diseñador enseñe lo que va a salir en el panel.
+      if (isSvgSrc(img.src) && s?.backgroundColor) {
+        return (
+          <div
+            className="img-preview"
+            style={{
+              ...box,
+              maskImage: `url('${img.src}')`,
+              WebkitMaskImage: `url('${img.src}')`,
+              maskSize: "contain",
+              WebkitMaskSize: "contain",
+              maskRepeat: "no-repeat",
+              WebkitMaskRepeat: "no-repeat",
+              maskPosition: "center",
+              WebkitMaskPosition: "center",
+            }}
+          />
+        );
       }
-      return <div className="img-placeholder">Imagen</div>;
+      return <img className="img-preview" src={img.src} alt="" draggable={false} style={box} />;
     }
     case "label": {
       const lbl = element as LabelElement;
@@ -114,6 +144,9 @@ export function ElementView({ element, selected, onSelect, onResizeStart }: Prop
       onPointerDown={(e) => {
         e.stopPropagation();
         onSelect();
+        // El spread de listeners va antes, así que este handler lo pisaría: hay que reenviarlo
+        // a mano o el sensor de dnd-kit nunca vería el pointerdown y el elemento no se arrastraría.
+        listeners?.onPointerDown?.(e);
       }}
     >
       <div className="element-preview">

@@ -1,7 +1,9 @@
 import type { Design } from "./design.ts";
 
-// Ejemplo de diseño válido. Sirve de documentación viva del contrato
-// y de entrada para el prototipo de generación (Fase 2).
+// Ejemplo de diseño válido. Sirve de documentación viva del contrato.
+//
+// Los `deviceId` y los `command` no son inventados: son los que publica `GET /api/devices` de
+// jaso-rc. Cámbialos por los de tu instalación —el editor los ofrece en un desplegable.
 export const exampleDesign: Design = {
   config: {
     name: "Salón",
@@ -25,44 +27,31 @@ export const exampleDesign: Design = {
         {
           id: "btn-power",
           type: "button",
-          label: "Power",
+          label: "Encender",
           position: { x: 40, y: 100, width: 160, height: 80 },
           style: { backgroundColor: "#d33", color: "#fff", borderRadius: 8 },
-          action: {
-            type: "http",
-            endpoint: "/api/power",
-            method: "POST",
-            payload: { device: "tv", state: "on" },
-          },
+          action: { type: "command", deviceId: "monitor", command: "power_on" },
         },
         {
           id: "slider-volume",
           type: "slider",
           label: "Volumen",
+          // El fader de la Midas va de 0 a 1: el rango del slider es el del comando, no un 0–100
+          // de adorno. `value` viaja como número en el cuerpo JSON.
           min: 0,
-          max: 100,
-          step: 1,
-          value: 35,
+          max: 1,
+          step: 0.01,
+          value: 0.35,
           sendOn: "release",
           position: { x: 40, y: 220, width: 300, height: 60 },
-          action: {
-            type: "http",
-            endpoint: "/api/volume",
-            method: "POST",
-            payload: { level: "{{value}}" },
-          },
+          action: { type: "command", deviceId: "midas", command: "main_fader", value: "{{value}}" },
         },
         {
           id: "img-logo",
           type: "image",
           src: "/assets/logo.png",
           position: { x: 1000, y: 100, width: 200, height: 120 },
-          action: {
-            type: "http",
-            endpoint: "/api/input",
-            method: "PUT",
-            payload: { source: "hdmi1" },
-          },
+          action: { type: "command", deviceId: "monitor", command: "input_hdmi1" },
         },
         {
           id: "btn-to-settings",
@@ -96,21 +85,16 @@ export const exampleDesign: Design = {
           action: { type: "navigate", screenId: "main" },
         },
         {
-          id: "slider-brightness",
+          id: "slider-ch1",
           type: "slider",
-          label: "Brillo",
+          label: "Canal 1",
           min: 0,
-          max: 100,
-          step: 1,
-          value: 75,
+          max: 1,
+          step: 0.01,
+          value: 0.75,
           sendOn: "release",
           position: { x: 40, y: 220, width: 300, height: 60 },
-          action: {
-            type: "http",
-            endpoint: "/api/brightness",
-            method: "POST",
-            payload: { level: "{{value}}" },
-          },
+          action: { type: "command", deviceId: "midas", command: "ch1_fader", value: "{{value}}" },
         },
       ],
     },

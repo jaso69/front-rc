@@ -17,6 +17,7 @@ interface Props {
   design: Design;
   screenIndex: number;
   selectedElementId: string | null;
+  showGrid: boolean;
   onSelectElement: (id: string | null) => void;
   onUpdateElement: (id: string, updates: ElementPatch) => void;
 }
@@ -34,7 +35,7 @@ interface ResizeState {
 
 const MIN_SIZE = 20;
 
-export function Canvas({ design, screenIndex, selectedElementId, onSelectElement, onUpdateElement }: Props) {
+export function Canvas({ design, screenIndex, selectedElementId, showGrid, onSelectElement, onUpdateElement }: Props) {
   const { setNodeRef } = useDroppable({ id: "canvas" });
   const [resize, setResize] = useState<ResizeState | null>(null);
   const updateRef = useRef(onUpdateElement);
@@ -112,6 +113,7 @@ export function Canvas({ design, screenIndex, selectedElementId, onSelectElement
           style={{ width, height, ...(screen.background ? backgroundStyle(screen.background) : {}) }}
           onPointerDown={() => onSelectElement(null)}
         >
+          {showGrid && <div className="canvas-grid" />}
           {screen.elements.map((el) => (
             <ElementView
               key={el.id}

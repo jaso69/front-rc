@@ -29,7 +29,7 @@ export function createElement(type: ElementType, x: number, y: number): DesignEl
         label: "Botón",
         position: { x: px, y: py, width: 140, height: 60 },
         style: { backgroundColor: "#2a6dbd", color: "#fff", borderRadius: 8 },
-        action: { type: "http", endpoint: "/api/", method: "POST" },
+        action: { type: "command", deviceId: "", command: "" },
       };
       return el;
     }
@@ -44,7 +44,8 @@ export function createElement(type: ElementType, x: number, y: number): DesignEl
         value: 50,
         sendOn: "release",
         position: { x: px, y: py, width: 280, height: 60 },
-        action: { type: "http", endpoint: "/api/", method: "POST", payload: { value: "{{value}}" } },
+        // El slider siempre manda su posición: jaso-rc la espera en `value`.
+        action: { type: "command", deviceId: "", command: "", value: "{{value}}" },
       };
       return el;
     }
